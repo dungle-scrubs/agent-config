@@ -1,0 +1,80 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(ls:*)",
+      "Bash(sed:*)",
+      "Bash(awk:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(cat:*)",
+      "Bash(less:*)",
+      "Bash(wc:*)",
+      "Bash(cut:*)",
+      "Bash(tr:*)",
+      "Bash(which:*)",
+      "Bash(whereis:*)",
+      "Bash(file:*)",
+      "Bash(stat:*)",
+      "Bash(du:*)",
+      "Bash(df:*)",
+      "Bash(ps:*)",
+      "Bash(top:*)",
+      "Bash(date:*)",
+      "Bash(whoami:*)",
+      "Bash(pwd:*)",
+      "Bash(echo:*)",
+      "Bash(printf:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm biome lint:*)",
+      "Bash(npx biome check:*)",
+      "Bash(npx markdownlint-cli2:*)",
+      "Bash(npx markdownlint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(do echo \"=== $file ===\")",
+      "Bash(done)",
+      "WebFetch(domain:localhost)"
+    ],
+    "deny": [],
+    "defaultMode": "default",
+    "additionalDirectories": []
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/clipboard-image-save.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/ccline/ccline -t gruvbox",
+    "padding": 0
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "lua-lsp@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "base@local": true,
+    "claude-opus-4-5-migration@local": true
+  },
+  "alwaysThinkingEnabled": true,
+  "preferences": {
+    "autoCompact": true,
+    "compactThreshold": 50000
+  }
+}
