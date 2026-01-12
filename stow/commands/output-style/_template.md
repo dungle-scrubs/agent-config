@@ -1,7 +1,7 @@
 ---
-name: [STYLE_NAME]  # No quotes, display name for the style
-description: [STYLE_DESCRIPTION]  # NO QUOTES - Brief description shown in /output-style menu
-keep-coding-instructions: [true|false]  # Whether to keep Claude Code's built-in coding instructions
+name: STYLE_NAME  # No quotes, display name for the style
+description: STYLE_DESCRIPTION  # NO QUOTES - Brief description shown in /output-style menu
+keep-coding-instructions: true  # Whether to keep Claude Code's built-in coding instructions
 ---
 
 # [STYLE_TITLE]

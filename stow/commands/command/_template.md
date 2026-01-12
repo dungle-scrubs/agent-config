@@ -1,5 +1,5 @@
 ---
-description: [COMMAND_DESCRIPTION]  # NO QUOTES AT ALL
+description: COMMAND_DESCRIPTION  # NO QUOTES AT ALL
 ---
 
 # [COMMAND_TITLE] Command
