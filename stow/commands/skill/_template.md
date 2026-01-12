@@ -1,7 +1,7 @@
 ---
-name: [SKILL_NAME]  # No quotes, lowercase with hyphens ONLY (max 64 chars)
-description: [SKILL_DESCRIPTION]  # NO QUOTES - Brief description of what AND when to use (max 1024 chars)
-allowed-tools: [TOOL_LIST]  # Optional: comma-separated, no brackets (e.g., Read, Grep, Glob)
+name: SKILL_NAME  # No quotes, lowercase with hyphens ONLY (max 64 chars)
+description: SKILL_DESCRIPTION  # NO QUOTES - Brief description of what AND when to use (max 1024 chars)
+allowed-tools: TOOL_LIST  # Optional: comma-separated, no brackets (e.g., Read, Grep, Glob)
 ---
 
 # [SKILL_TITLE]

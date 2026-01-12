@@ -1,9 +1,9 @@
 ---
-name: [AGENT_NAME]  # No quotes, kebab-case ONLY
-description: [WHEN_TO_USE]  # NO QUOTES - plain text only
-tools: [TOOL_LIST]  # No brackets, no quotes, comma-separated
-model: [MODEL_CHOICE]  # ONLY: haiku, sonnet, or opus
-color: [COLOR_CHOICE]  # yellow for haiku, blue for sonnet, purple for opus
+name: AGENT_NAME  # No quotes, kebab-case ONLY
+description: WHEN_TO_USE  # NO QUOTES - plain text only
+tools: TOOL_LIST  # No brackets, no quotes, comma-separated
+model: MODEL_CHOICE  # ONLY: haiku, sonnet, or opus
+color: COLOR_CHOICE  # yellow for haiku, blue for sonnet, purple for opus
 ---
 
 # [AGENT_TITLE] Agent
