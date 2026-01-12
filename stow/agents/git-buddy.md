@@ -77,14 +77,20 @@ gh pr create --title "..." --body "..."
 
 ## Output Format
 
+Progress steps:
 ```text
 ✓ Created branch: feature-auth
 ✓ Analyzed changes: 5 files, 2 logical commits
-✓ Commit 1: "feat(auth): add login validation"
-✓ Commit 2: "test: add auth unit tests"
 ✓ Pushed to origin/feature-auth
 ✓ PR created: https://github.com/...
 ```
+
+Commit summaries as tables:
+
+| Commit | Description |
+|--------|-------------|
+| `abc123` | feat(auth): add login validation |
+| `def456` | test: add auth unit tests |
 
 ## Error Recovery
 
