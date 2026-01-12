@@ -16,8 +16,15 @@ Projects with explicitly assigned ports (to avoid conflicts):
 | 3016 | my-support/dashboard   | ~/dev/my-support/apps/dashboard         |
 | 3017 | my-support/demo        | ~/dev/my-support/apps/demo              |
 | 3018 | my-support/widget      | ~/dev/my-support/apps/widget            |
+| 3019 | code-hunt/dashboard    | ~/dev/claude-plugins/games/skills/code-hunt |
 
 When creating new projects that need a specific port, add them here.
+
+## Server Ports (8xxx range)
+
+| Port | Project                | Path                                        |
+|------|------------------------|---------------------------------------------|
+| 8019 | code-hunt/api          | ~/dev/claude-plugins/games/skills/code-hunt |
 
 ## Communication
 
@@ -69,6 +76,14 @@ Docker mode (`docker compose up tool-proxy`):
 | Scaling | 1 process per session | Shared server |
 | Remote access | No | Yes |
 | Process lifecycle | Tied to Claude Code | Independent |
+
+## Git Output
+
+Format commit lists as tables:
+
+| Commit | Description |
+|--------|-------------|
+| `abc123` | commit message |
 
 ## Code Style
 
