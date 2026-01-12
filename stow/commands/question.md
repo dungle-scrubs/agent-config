@@ -18,10 +18,11 @@ to resolve any identified issues.
 **STEP 1 - ANALYSIS & EXPLANATION:**
 
 - Analyze the question and identify potential systemic issues
-- Explain WHY certain behaviors occurred or didn't occur  
+- Explain WHY certain behaviors occurred or didn't occur
 - Describe decision-making logic and triggers that led to specific choices
 - Clarify how the Claude Config system influences behavior selection
 - **PROVIDE ACTIONABLE RECOMMENDATIONS**: Specifically identify what changes are needed
+- **SUGGEST PROMPTING REFINEMENTS**: Recommend specific prompt/instruction changes that could prevent this issue in the future (e.g., additions to CLAUDE.md, personality reminders, system prompts, or behavioral guidelines)
 
 **STEP 2 - USER APPROVAL FOR FIXING:**
 
@@ -57,6 +58,7 @@ STEP 1 - EXPLANATION PHASE:
 - Describe logic, triggers, and contextual factors that influenced decisions
 - Focus on WHY you made certain choices or didn't make them
 - **PROVIDE SPECIFIC RECOMMENDATIONS**: Identify exactly what changes are needed
+- **SUGGEST PROMPTING REFINEMENTS**: Propose specific prompt/instruction additions that could prevent this issue (e.g., "Add to CLAUDE.md: 'When accessing external APIs, try the direct API approach first before asking for credentials'")
 
 STEP 2 - APPROVAL PHASE (if issues identified):
 - IF you identified issues that question-fixer could resolve:
@@ -78,10 +80,11 @@ CRITICAL CONSTRAINTS:
 ### Step 1 - Explanation Response
 
 1. **Direct Answer**: Explain the specific behavior or decision being questioned
-2. **Reasoning**: Describe the logic, triggers, or context that influenced the decision  
+2. **Reasoning**: Describe the logic, triggers, or context that influenced the decision
 3. **System Context**: How Claude Config instructions, global context, or CLAUDE.md affected the choice
 4. **Issues Identified**: Any systemic problems or gaps that were discovered
 5. **Specific Recommendations**: Exactly what needs to change to achieve expected result
+6. **Prompting Refinements**: Concrete prompt/instruction additions to prevent this issue in future sessions (provide exact text to add to CLAUDE.md, personality reminders, or system prompts)
 
 ### Step 2 - Approval Request (if issues found)
 
@@ -105,7 +108,7 @@ CRITICAL CONSTRAINTS:
 
 - "I found missing trigger instructions for memory-buddy in your CLAUDE.md file. Would you like me to fix these issues automatically using question-fixer? (yes/no)"
 
-### Example 2: Workflow Inconsistencies  
+### Example 2: Workflow Inconsistencies
 
 **Question**: "why did you load standards files in this case but not that case?"
 
@@ -118,3 +121,25 @@ CRITICAL CONSTRAINTS:
 **Step 2 Response** (if issues found):
 
 - "I identified inconsistent context loading patterns that could be standardized. Would you like me to fix these issues automatically using question-fixer? (yes/no)"
+
+### Example 3: Inefficient Tool Usage
+
+**Question**: "why did you think you couldn't access the Vercel Edge Config?"
+
+**Step 1 Response**:
+
+- Explain the failed approaches (CLI commands, wrong 1Password field)
+- Identify the root cause (gave up too early, didn't try direct API)
+- Note this was behavioral inefficiency, not a config issue
+
+**Prompting Refinement**:
+
+```markdown
+Add to personality-reminders or CLAUDE.md:
+
+- When accessing external service APIs, try the direct API approach first using available credentials before asking the user for IDs or connection strings
+- If one credential field doesn't work (e.g., `credential`), check for alternative fields (e.g., `token`) in 1Password before giving up
+- Prefer discovery endpoints (e.g., `GET /v1/edge-config`) over asking for specific IDs
+```
+
+**Step 2 Response**: No systemic fix needed - this was a behavioral pattern issue. The prompting refinement above can help prevent similar inefficiencies.
