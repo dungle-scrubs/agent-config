@@ -1,9 +1,5 @@
 ---
-name: react-hooks
-description: React hook patterns and ahooks library usage. Apply when working with
-  React/Preact components to identify hook extraction opportunities and recommend
-  ahooks alternatives to manual implementations.
-allowed-tools: Read, Grep, Glob
+description: React hook patterns and ahooks library usage. Apply when working with React/Preact components to identify hook extraction opportunities and recommend ahooks alternatives to manual implementations.
 ---
 
 # React Hooks - Patterns & ahooks Library
