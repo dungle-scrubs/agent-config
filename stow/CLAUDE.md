@@ -98,6 +98,23 @@ Format commit lists as tables:
 - Never remove comments unless removing the associated code
 - Update comments when modifying code
 
+## Secrets Management
+
+Use varlock with keychain-stored 1Password service account tokens:
+
+```bash
+# In start scripts, inject OP_TOKEN from keychain then run varlock
+export OP_TOKEN=$(security find-generic-password -a dev-secrets -s OP_SERVICE_ACCOUNT_TOKEN -w)
+exec varlock run -- node server.js
+```
+
+Keychain secrets use service account `dev-secrets`. Add with:
+```bash
+security add-generic-password -a dev-secrets -s SECRET_NAME -w "value"
+```
+
+Set keychain item access to "Allow all applications" to avoid biometric prompts.
+
 ## Environment Variables
 
 - Load credentials from `~/.env/services` and `~/.env/models`
@@ -141,6 +158,7 @@ Format commit lists as tables:
 
 ### Testing
 
+- Design for testability: use constructor DI so test doubles can be injected without mocking frameworks
 - Test public behavior, not private implementation
 - Mock at architectural boundaries; avoid over-mocking internals
 

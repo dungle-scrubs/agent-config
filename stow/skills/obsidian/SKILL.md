@@ -44,7 +44,35 @@ Observe the target file's format. Common patterns in this vault:
 - Code blocks with language tags
 - Tables for comparisons
 - Bullet lists for collections
-- Links in format `[Title](URL)` or `+ [Title](URL)`
+- Links in format `[Title](URL)` or `- [Title](URL)`
+
+### Callouts
+
+Use Obsidian callouts for highlighting important information:
+
+```markdown
+> [!tip] Always expanded
+> Content here
+
+> [!note]- Collapsed by default
+> Content here
+
+> [!warning]+ Expanded by default
+> Content here
+```
+
+**Types:** `tip`, `note`, `warning`, `error`, `bug`, `info`, `question`, `example`
+
+**Modifiers:**
+- No suffix: always expanded
+- `-`: collapsed by default
+- `+`: expanded by default
+
+Use callouts for:
+- Important warnings or gotchas
+- Tips and best practices
+- Code examples that need context
+- Errors and bugs to watch out for
 
 ## Examples
 

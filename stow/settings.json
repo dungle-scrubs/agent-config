@@ -6,7 +6,7 @@
   "hooks": {},
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/ccline/ccline -t gruvbox",
+    "command": "~/.claude/statusline/status.sh",
     "padding": 0
   },
   "enabledPlugins": {
@@ -18,7 +18,9 @@
     "base@local": true,
     "tool-proxy-mcp@tool-proxy": true,
     "tool-proxy-hooks@tool-proxy": true,
-    "games@local": true
+    "games@local": true,
+    "swift-lsp@claude-plugins-official": true,
+    "tool-proxy@tool-proxy": true
   },
   "alwaysThinkingEnabled": true,
   "preferences": {

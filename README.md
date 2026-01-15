@@ -2,13 +2,19 @@
 
 Claude Code configuration files, symlinked to `~/.claude/` via GNU Stow.
 
+## Dependencies
+
+- [GNU Stow](https://www.gnu.org/software/stow/) - symlink manager
+- [Nerd Font](https://www.nerdfonts.com/) - icons in status line
+- [jq](https://jqlang.github.io/jq/) - JSON parsing in status line
+
+```bash
+brew install stow jq
+```
+
 ## Setup
 
 ```bash
-# Install GNU Stow if needed
-brew install stow
-
-# Symlink configuration
 ./install.sh
 ```
 

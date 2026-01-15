@@ -1,5 +1,5 @@
 ---
-name: typescript
+name: ts-standards
 description: TypeScript standards - strict mode, Result types, discriminated unions, readonly default, import type, as const. Triggers: TypeScript, defining types, error handling, TypeScript patterns.
 ---
 
