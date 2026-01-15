@@ -1,6 +1,5 @@
 ---
-name: ts-standards
-description: TypeScript standards - strict mode, Result types, discriminated unions, readonly default, import type, as const. Triggers: TypeScript, defining types, error handling, TypeScript patterns.
+description: "MANDATORY for ALL TypeScript output - files AND conversational snippets. Covers: strict mode, Result types, discriminated unions, readonly, import type, as const. Trigger: any TS code, types, interfaces, generics, error handling. No exceptions for 'simple' requests."
 ---
 
 # TypeScript Best Practices
@@ -351,7 +350,7 @@ function map<TInput, TOutput>(arr: TInput[], fn: (item: TInput) => TOutput): TOu
 
 ## JSDoc Comments
 
-Use for non-obvious behavior and public APIs:
+Use JSDoc to explain why code exists:
 
 ```typescript
 /** Subtracts two numbers */
