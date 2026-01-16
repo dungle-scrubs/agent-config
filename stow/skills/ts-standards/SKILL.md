@@ -372,6 +372,122 @@ const arr: string[] = [];
 const v2 = arr[0]; // string | undefined
 ```
 
+## CLI Applications
+
+### Required Stack
+
+| Purpose | Package |
+|---------|---------|
+| CLI framework | Commander.js |
+| Colors | chalk v4 (not v5 - ESM-only) |
+| Spinners | ora |
+| Progress bars | cli-progress |
+
+### Example CLI Setup
+
+```typescript
+import { Command } from "commander";
+import chalk from "chalk";
+import ora from "ora";
+import { SingleBar, Presets } from "cli-progress";
+
+const program = new Command();
+
+program
+  .name("my-cli")
+  .description("CLI tool description")
+  .version("1.0.0");
+
+program
+  .command("process")
+  .description("Process files")
+  .argument("<path>", "Path to process")
+  .option("-v, --verbose", "Verbose output")
+  .action(async (path: string, options: { verbose?: boolean }) => {
+    const spinner = ora("Loading files...").start();
+
+    try {
+      const files = await loadFiles(path);
+      spinner.succeed(`Loaded ${files.length} files`);
+
+      const bar = new SingleBar({}, Presets.shades_classic);
+      bar.start(files.length, 0);
+
+      for (const file of files) {
+        await processFile(file);
+        bar.increment();
+      }
+
+      bar.stop();
+      console.log(chalk.green("Done!"));
+    } catch (error) {
+      spinner.fail(chalk.red("Failed to load files"));
+      process.exit(1);
+    }
+  });
+
+program.parse();
+```
+
+### chalk v4 Note
+
+Use chalk v4, not v5. v5 is ESM-only which causes issues with many build setups:
+
+```bash
+npm install chalk@4
+```
+
+### LLM-Friendly Output
+
+All CLIs must support both human and machine consumption:
+
+```typescript
+import { Command } from "commander";
+import chalk from "chalk";
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+const program = new Command();
+
+program
+  .name("users")
+  .description("Manage users in the system")
+  .version("1.0.0");
+
+program
+  .command("list")
+  .description("List all users. Returns array of user objects with id, name, and email fields.")
+  .option("--json", "Output as JSON for programmatic consumption")
+  .option("--limit <n>", "Maximum number of users to return", "50")
+  .action(async (options: { json?: boolean; limit: string }) => {
+    const users = await getUsers(parseInt(options.limit));
+
+    if (options.json) {
+      // Machine-readable: structured, no formatting
+      console.log(JSON.stringify(users, null, 2));
+    } else {
+      // Human-readable: colors, tables, pleasant
+      console.log(chalk.bold(`\nUsers (${users.length}):\n`));
+      for (const user of users) {
+        console.log(`  ${chalk.cyan(user.name)} <${user.email}>`);
+      }
+      console.log();
+    }
+  });
+
+program.parse();
+```
+
+**Rules:**
+1. `--json` flag on every command that outputs data
+2. JSON output: structured, complete, no ANSI codes
+3. Default output: human-readable with colors/formatting
+4. `--help` descriptions must explain what the command returns, not just what it does
+
 ## Quick Reference
 
 | Pattern | Preference |

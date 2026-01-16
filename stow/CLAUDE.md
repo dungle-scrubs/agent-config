@@ -26,6 +26,15 @@ When creating new projects that need a specific port, add them here.
 |------|------------------------|---------------------------------------------|
 | 8019 | code-hunt/api          | ~/dev/claude-plugins/games/skills/code-hunt |
 
+## New Projects
+
+When user describes building something new, invoke the `project-scaffold` skill before writing code. Trigger phrases:
+- "build me X", "create a project", "start a new project"
+- "should I use monorepo", "sqlite vs postgres"
+- "what structure for X"
+
+Or user can run `/scaffold` explicitly.
+
 ## Communication
 
 - When asked "why" you did or didn't do something, ANSWER THE QUESTION FIRST
