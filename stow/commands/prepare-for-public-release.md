@@ -447,14 +447,16 @@ IF user declines: Skip to Step 14
 
 ---
 
-#### IF PRIMARY_LANGUAGE = Node.js/TypeScript AND PROJECT_TYPE = library:
+#### IF PRIMARY_LANGUAGE = Node.js/TypeScript AND PROJECT_TYPE = library OR cli:
 
-**npm Registry Setup**
+**npm Registry Setup with OIDC Trusted Publishing (recommended)**
+
+OIDC trusted publishing eliminates the need for npm tokens. GitHub Actions authenticates directly with npm.
 
 1. Ensure `package.json` has required fields:
 ```json
 {
-  "name": "@scope/package-name",
+  "name": "package-name",
   "version": "0.1.0",
   "description": "One-line description",
   "main": "dist/index.js",
@@ -467,11 +469,28 @@ IF user declines: Skip to Step 14
     "type": "git",
     "url": "git+https://github.com/USER/REPO.git"
   },
+  "author": "Kevin Frilot",
   "license": "MIT"
 }
 ```
 
-2. Create `.github/workflows/publish.yml`:
+2. **First publish manually** (OIDC requires package to exist):
+```bash
+npm login
+npm publish --access public
+```
+
+3. **Configure OIDC trusted publisher on npm:**
+   - Go to `https://www.npmjs.com/package/PACKAGE_NAME/access`
+   - Under "Trusted Publishers", click "Add trusted publisher"
+   - Configure:
+     - **Organization or user:** GitHub username/org (case-sensitive, must match GitHub exactly)
+     - **Repository:** repo name (case-sensitive)
+     - **Workflow filename:** `publish.yml` (just filename, not path)
+     - **Environment name:** leave empty
+   - Under "Publishing access", select "Require two-factor authentication and disallow tokens (recommended)"
+
+4. Create `.github/workflows/publish.yml`:
 ```yaml
 name: Publish to npm
 on:
@@ -486,18 +505,38 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
-      - run: npm ci
-      - run: npm run build --if-present
-      - run: npm publish --access public --provenance
+          cache: 'pnpm'
+
+      - name: Update npm to latest (OIDC requires 11.5.1+)
+        run: npm install -g npm@latest
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - name: Publish with OIDC
+        run: npm publish --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
 ```
 
-3. Document NPM_TOKEN setup in PUBLISHING.md
+**Key requirements for OIDC:**
+- npm CLI 11.5.1+ (workflow updates npm)
+- `id-token: write` permission
+- `NPM_CONFIG_PROVENANCE: true` environment variable
+- NO `registry-url` in setup-node (interferes with OIDC)
+- NO `NODE_AUTH_TOKEN` (OIDC replaces tokens)
+- Trusted publisher config must match exactly (case-sensitive)
+
+**Troubleshooting 404 errors:** Usually means npm couldn't match the workflow to the trusted publisher config. Verify org/user, repo, and workflow filename match exactly.
 
 ---
 
@@ -624,24 +663,20 @@ on:
 
 jobs:
   build:
+    runs-on: macos-14
     strategy:
       matrix:
-        include:
-          - arch: arm64
-            runner: macos-14    # Apple Silicon
-          - arch: x86_64
-            runner: macos-13    # Intel
-    runs-on: ${{ matrix.runner }}
+        arch: [arm64, x86_64]
     steps:
       - uses: actions/checkout@v4
 
       - name: Build release binary
-        run: swift build -c release
+        run: swift build -c release --arch ${{ matrix.arch }}
 
       - name: Create tarball
         run: |
           mkdir -p dist
-          cp .build/release/tool-name dist/
+          cp .build/${{ matrix.arch }}-apple-macosx/release/tool-name dist/
           tar -czvf tool-name-${{ github.ref_name }}-darwin-${{ matrix.arch }}.tar.gz -C dist tool-name
 
       - name: Upload artifact
@@ -937,9 +972,10 @@ Detection:
 
 Result:
 - CI workflow with Node.js 22
-- ESLint + Prettier setup
-- npm publish workflow with provenance
+- ESLint + Prettier setup (or Biome)
+- npm publish workflow with OIDC trusted publishing (no tokens)
 - package.json updated with required fields
+- User manually publishes first, then configures OIDC on npm
 </example>
 
 <example>
