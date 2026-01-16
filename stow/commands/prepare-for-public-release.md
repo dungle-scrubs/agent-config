@@ -335,6 +335,7 @@ jobs:
   - BSD 3-Clause (permissive)
 
 **Copyright holder:** Kevin Frilot
+**GitHub username:** dungle-scrubs
 
 ### Step 11: Generate README
 
