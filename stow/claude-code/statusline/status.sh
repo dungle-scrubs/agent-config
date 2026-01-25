@@ -18,21 +18,21 @@ C_RESET="\033[0m"
 
 # === Segment 1: Model ===
 MODEL=$(echo "$JSON" | jq -r '.model.display_name // "?"' 2>/dev/null || echo "?")
-SEG_MODEL="${C_ORANGE}󰘧 ${MODEL}${C_RESET}"
+SEG_MODEL="${C_ORANGE}λ ${MODEL}${C_RESET}"
 
 # === Segment 2: Folder ===
 CWD=$(echo "$JSON" | jq -r '.cwd // "?"' 2>/dev/null || echo "?")
 FOLDER=$(basename "$CWD")
-SEG_FOLDER="${C_OLIVE}󰉋 ${FOLDER}${C_RESET}"
+SEG_FOLDER="${C_OLIVE}» ${FOLDER}${C_RESET}"
 
 # === Segment 3: Git branch + status ===
 BRANCH=$(git -C "$CWD" branch --show-current 2>/dev/null || echo "")
 if [[ -n "$BRANCH" ]]; then
   DIRTY=""
   if [[ -n $(git -C "$CWD" status --porcelain 2>/dev/null) ]]; then
-    DIRTY=" ●"
+    DIRTY=" *"
   fi
-  SEG_GIT="${C_TEAL}󰊢 ${BRANCH}${DIRTY}${C_RESET}"
+  SEG_GIT="${C_TEAL}@ ${BRANCH}${DIRTY}${C_RESET}"
 else
   SEG_GIT=""
 fi
@@ -41,24 +41,7 @@ fi
 CTX_CURRENT=$(echo "$JSON" | jq -r '.context_window.total_input_tokens // 0' 2>/dev/null || echo "0")
 CTX_PCT=$(echo "$JSON" | jq -r '.context_window.used_percentage // 0' 2>/dev/null || echo "0")
 CTX_TOKENS=$(awk "BEGIN {printf \"%.1fk\", $CTX_CURRENT / 1000}")
-
-# Pick icon based on percentage (7 stages)
-if [[ $CTX_PCT -lt 15 ]]; then
-  CTX_ICON="󰝦"
-elif [[ $CTX_PCT -lt 30 ]]; then
-  CTX_ICON="󰪞"
-elif [[ $CTX_PCT -lt 45 ]]; then
-  CTX_ICON="󰪟"
-elif [[ $CTX_PCT -lt 60 ]]; then
-  CTX_ICON="󰪠"
-elif [[ $CTX_PCT -lt 75 ]]; then
-  CTX_ICON="󰪡"
-elif [[ $CTX_PCT -lt 90 ]]; then
-  CTX_ICON="󰪢"
-else
-  CTX_ICON="󰪣"
-fi
-SEG_CTX="${C_PURPLE}${CTX_ICON} ${CTX_PCT}% · ${CTX_TOKENS}${C_RESET}"
+SEG_CTX="${C_PURPLE}${CTX_PCT}% ${CTX_TOKENS}${C_RESET}"
 
 # === Segment 6: Tool-proxy connection ===
 STATE_FILE="/tmp/tool-proxy-state.json"
@@ -71,25 +54,25 @@ if [[ -f "$STATE_FILE" ]]; then
   case "$TP_STATE" in
     connecting)
       if [[ $AGE_SEC -gt 30 ]]; then
-        SEG_TP="${C_RED}󰿘 󰅖${C_RESET}"  # stuck connecting = dead
+        SEG_TP="${C_RED}tp:x${C_RESET}"
       else
-        SEG_TP="${C_YELLOW}󰿘 󰦖${C_RESET}"
+        SEG_TP="${C_YELLOW}tp:...${C_RESET}"
       fi ;;
     connected)
-      SEG_TP="${C_GREEN}󰿘 󰄬${C_RESET}" ;;
+      SEG_TP="${C_GREEN}tp:ok${C_RESET}" ;;
     error)
-      SEG_TP="${C_RED}󰿘 󰅖${C_RESET}" ;;
+      SEG_TP="${C_RED}tp:err${C_RESET}" ;;
     disconnected)
-      SEG_TP="${C_RED}󰿘 󰅖${C_RESET}" ;;
+      SEG_TP="${C_RED}tp:off${C_RESET}" ;;
     *)
-      SEG_TP="${C_GRAY}󰿘 ?${C_RESET}" ;;
+      SEG_TP="${C_GRAY}tp:?${C_RESET}" ;;
   esac
 else
-  SEG_TP="${C_GRAY}󰿘 ?${C_RESET}"
+  SEG_TP="${C_GRAY}tp:?${C_RESET}"
 fi
 
-# Output
+# Output - using printf to avoid echo -e issues
 SEGMENTS="$SEG_MODEL | $SEG_FOLDER"
 [[ -n "$SEG_GIT" ]] && SEGMENTS="$SEGMENTS | $SEG_GIT"
 SEGMENTS="$SEGMENTS | $SEG_CTX | $SEG_TP"
-echo -e "$SEGMENTS"
+printf '%b\n' "$SEGMENTS"

@@ -1,0 +1,6 @@
+model = "gpt-5.2-codex"
+
+[mcp_servers.tool-proxy]
+startup_timeout_sec = 30
+command = "sh"
+args = ["-c", "$HOME/dev/tool-proxy/service/start.sh"]

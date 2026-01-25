@@ -17,6 +17,7 @@
     "claude-opus-4-5-migration@local": true,
     "base@local": true,
     "games@local": true,
+    "fuse@local": true,
     "swift-lsp@claude-plugins-official": true,
     "tool-proxy@tool-proxy": true
   },
