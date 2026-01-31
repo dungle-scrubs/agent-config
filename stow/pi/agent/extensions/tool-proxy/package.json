@@ -1,0 +1,8 @@
+{
+	"name": "pi-tool-proxy-bridge",
+	"version": "1.0.0",
+	"type": "module",
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.25.3"
+	}
+}
