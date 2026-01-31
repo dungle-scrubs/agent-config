@@ -1,5 +1,5 @@
 #!/bin/bash
-# Symlink Claude Code and Codex configuration files
+# Symlink Claude Code, Codex, and Pi configuration files
 # Requires GNU Stow: brew install stow
 
 set -e
@@ -26,6 +26,12 @@ ln -sf "$SCRIPT_DIR/stow/shared/commands" ~/.codex/commands
 ln -sf "$SCRIPT_DIR/stow/shared/skills" ~/.codex/skills
 
 echo "Codex configuration linked to ~/.codex/"
+
+# === Pi ===
+mkdir -p ~/.pi/agent
+stow -d "$SCRIPT_DIR/stow/pi" -t ~/.pi .
+
+echo "Pi configuration linked to ~/.pi/"
 
 # === Additional work dirs (Claude Code only) ===
 WORK_DIRS_CONFIG="$HOME/.config/claude-work-dirs"
