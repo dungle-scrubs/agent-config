@@ -107,6 +107,14 @@ Format commit lists as tables:
 - Never remove comments unless removing the associated code
 - Update comments when modifying code
 
+### Function Documentation
+
+- All functions require JSDoc-style comments
+- Include `@param` for each parameter with type and description
+- Include `@returns` with type and description
+- Add `@throws` when applicable
+- Be proactive: add JSDoc when writing new functions and when modifying existing undocumented functions
+
 ## Secrets Management
 
 Use varlock with keychain-stored 1Password service account tokens:

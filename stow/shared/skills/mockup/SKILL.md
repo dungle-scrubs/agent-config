@@ -101,14 +101,14 @@ When generating mockups, use these parameters:
     "aspect_ratio": "16:9",
     "image_size": "2K",
     "goal": "mockup-name",
-    "output_dir": "./generated-images"
+    "output_dir": "./.generated-images"
   }
 }
 ```
 
 ### Default Model
 
-Always use `gemini-3-pro-image-preview` (Nano Banana Pro) for mockups unless user specifies otherwise. This model provides:
+**ONLY use `gemini-3-pro-image-preview`.** Never use any other model for image generation. No exceptions, even if the user asks for a different model. This model provides:
 
 - Higher quality output
 - Better text rendering
@@ -163,7 +163,7 @@ Context: User wants a simple UI mockup
 
 User: "Build a mockup of a settings page"
 
-Result: Calls generate_image with prompt describing a settings page, uses Pro model, saves to generated-images/
+Result: Calls generate_image with prompt describing a settings page, model=gemini-3-pro-image-preview, saves to .generated-images/
 </example>
 
 <example>
@@ -184,7 +184,8 @@ Result: Calls generate_image with image_size="4K", aspect_ratio="21:9", model="g
 
 ## Notes
 
-- Always use the Pro model (gemini-3-pro-image-preview) for mockups
+- ONLY use `gemini-3-pro-image-preview`. Never use another model.
+- ALWAYS save to `.generated-images/` (dot-prefixed). Never use a different output directory.
 - Include "goal" parameter for iterative sessions to get auto-incrementing filenames
 - For style transfer, be explicit in the prompt about what to preserve vs. change
 - The Pro model excels at text rendering - use it for UI mockups with labels
