@@ -28,21 +28,11 @@ ln -sf "$SCRIPT_DIR/stow/shared/skills" ~/.codex/skills
 echo "Codex configuration linked to ~/.codex/"
 
 # === Pi ===
-mkdir -p ~/.pi
-# Remove existing non-symlink files that conflict with stow
-if [[ -d ~/.pi/agent && ! -L ~/.pi/agent ]]; then
-    # Backup sessions/auth if they exist (runtime data)
-    [[ -d ~/.pi/agent/sessions ]] && mv ~/.pi/agent/sessions /tmp/pi-sessions-backup 2>/dev/null || true
-    [[ -f ~/.pi/agent/auth.json ]] && mv ~/.pi/agent/auth.json /tmp/pi-auth-backup.json 2>/dev/null || true
-    # Remove the agent dir to allow stow
-    rm -rf ~/.pi/agent
-fi
-stow -d "$SCRIPT_DIR/stow/pi" -t ~/.pi .
-# Restore runtime data
-[[ -d /tmp/pi-sessions-backup ]] && mv /tmp/pi-sessions-backup ~/.pi/agent/sessions 2>/dev/null || true
-[[ -f /tmp/pi-auth-backup.json ]] && mv /tmp/pi-auth-backup.json ~/.pi/agent/auth.json 2>/dev/null || true
+mkdir -p ~/.pi/agent
+# Stow config files into ~/.pi/agent (preserves runtime data like sessions/, auth.json)
+stow -d "$SCRIPT_DIR/stow/pi" -t ~/.pi/agent .
 
-echo "Pi configuration linked to ~/.pi/"
+echo "Pi configuration linked to ~/.pi/agent/"
 
 # === Additional work dirs (Claude Code only) ===
 WORK_DIRS_CONFIG="$HOME/.config/claude-work-dirs"
