@@ -314,7 +314,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	}
 
 	// Register /tasks command
-	pi.registerCommand("1-tasks", {
+	pi.registerCommand("tasks", {
 		description: "Manage tasks - list, add, complete, delete, clear",
 		handler: async (args, ctx) => {
 			const parts = args.trim().split(/\s+/);
