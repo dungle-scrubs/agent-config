@@ -9,3 +9,5 @@ node_modules/
 
 # Runtime data
 **/sessions/
+stow/pi/agent/sessions/
+stow/pi/agent/auth.json
