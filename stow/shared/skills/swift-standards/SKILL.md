@@ -928,7 +928,7 @@ class FileWatcher {
 
 // Usage
 let watcher = FileWatcher()
-watcher.watch(paths: ["/Users/kevin/Downloads"]) { changedPaths in
+watcher.watch(paths: ["~/Downloads"]) { changedPaths in
     for path in changedPaths {
         print("Changed: \(path)")
     }

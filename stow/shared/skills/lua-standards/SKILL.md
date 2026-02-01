@@ -154,7 +154,7 @@ end
 local user = {
   id = "123",
   name = "Kevin",
-  email = "kevin@example.com",
+  email = "user@example.com",
 }
 ```
 
