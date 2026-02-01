@@ -1,6 +1,6 @@
 ---
 name: react-state-management
-description: React state hierarchy - useState (local), TanStack Query (server), Zustand (global), URL params (shareable). Triggers: state management, data fetching, caching, global state, Zustand, TanStack Query.
+description: "React state hierarchy - useState (local), TanStack Query (server), Zustand (global), URL params (shareable). Triggers: state management, data fetching, caching, global state, Zustand, TanStack Query."
 ---
 
 # React State Management

@@ -1,4 +1,5 @@
 ---
+name: ts-standards
 description: "MANDATORY for ALL TypeScript output - files AND conversational snippets. Covers: strict mode, Result types, discriminated unions, readonly, import type, as const. Trigger: any TS code, types, interfaces, generics, error handling. No exceptions for 'simple' requests."
 ---
 

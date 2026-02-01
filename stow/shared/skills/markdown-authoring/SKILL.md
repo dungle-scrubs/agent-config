@@ -1,6 +1,6 @@
 ---
 name: markdown-authoring
-description: Markdown formatting for new .md file creation (line length, spacing, frontmatter). Triggers: new markdown file, markdown formatting, .md file.
+description: "Markdown formatting for new .md file creation (line length, spacing, frontmatter). Triggers: new markdown file, markdown formatting, .md file."
 allowed-tools: Write, Edit, MultiEdit
 ---
 

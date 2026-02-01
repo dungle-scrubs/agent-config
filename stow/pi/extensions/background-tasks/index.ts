@@ -128,7 +128,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		name: "bg_bash",
 		label: "Background Bash",
 		description:
-			"Run a bash command in the background. Returns immediately with a task ID. Use task_output to retrieve the output later. Good for long-running commands like builds, tests, or servers.",
+			"Run a bash command in the background. Returns immediately with a task ID. Use task_output to retrieve the output later. Good for long-running commands like builds, tests, or servers.\n\nWHEN TO USE:\n- Starting daemons or servers\n- Long-running builds or tests\n- Any process you want to run independently\n\nWARNING: Never use bash tool with & to background processes - it will hang. Use bg_bash instead.",
 		parameters: Type.Object({
 			command: Type.String({ description: "Bash command to run in background" }),
 			timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, default: no timeout)" })),

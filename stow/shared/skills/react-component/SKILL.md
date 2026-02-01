@@ -1,6 +1,6 @@
 ---
 name: react-component
-description: React component development with Radix composition patterns and shadcn/ui. Triggers: React components, component architecture, forms, modals, data tables, building UI.
+description: "React component development with Radix composition patterns and shadcn/ui. Triggers: React components, component architecture, forms, modals, data tables, building UI."
 ---
 
 # React Component Development

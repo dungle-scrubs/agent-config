@@ -1,5 +1,8 @@
 # agent-config
 
+[![CI](https://github.com/dungle-scrubs/agent-config/actions/workflows/ci.yml/badge.svg)](https://github.com/dungle-scrubs/agent-config/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Configuration files for Claude Code, Codex, and Pi - managed via GNU Stow.
 
 ## Dependencies
@@ -63,3 +66,16 @@ After running `install.sh`:
 - Pi loads configs from `~/.pi/`
 
 To add new configurations, create files in the appropriate `stow/` directory and re-run `./install.sh`.
+
+## Known Limitations
+
+- Extensions use `@mariozechner/pi-coding-agent` types which have upstream vulnerabilities in transitive dependencies (fast-xml-parser via AWS SDK)
+- Shared commands/skills are symlinked to multiple agents - changes affect all
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+[MIT](LICENSE)

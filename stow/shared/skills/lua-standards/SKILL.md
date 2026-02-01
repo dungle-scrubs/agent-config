@@ -1,5 +1,6 @@
 ---
-description: MANDATORY for ALL Lua output - files AND conversational snippets. Covers local over global, LuaLS type annotations, StyLua formatting, module patterns, pcall error handling. Trigger: any Lua code, Neovim config, Hammerspoon, LÖVE2D, game scripting. No exceptions.
+name: lua-standards
+description: "MANDATORY for ALL Lua output - files AND conversational snippets. Covers local over global, LuaLS type annotations, StyLua formatting, module patterns, pcall error handling. Trigger: any Lua code, Neovim config, Hammerspoon, LÖVE2D, game scripting. No exceptions."
 ---
 
 # Lua Best Practices

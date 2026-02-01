@@ -3,11 +3,22 @@ node_modules/
 
 # OS
 .DS_Store
+*~
+*.swp
 
 # Secrets - never commit
 **/auth.json
+.env
+.env.local
+.env.*.local
 
 # Runtime data
 **/sessions/
 stow/pi/agent/sessions/
 stow/pi/agent/auth.json
+
+# Claude Code artifacts
+.claude/
+
+# Logs
+*.log

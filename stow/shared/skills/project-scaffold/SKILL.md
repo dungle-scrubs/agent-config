@@ -1,4 +1,5 @@
 ---
+name: project-scaffold
 description: "Project structure and database selection. Trigger: new project, project setup, scaffold, monorepo, turborepo, database selection, sqlite vs postgres, convex. Use when user describes building something new."
 ---
 

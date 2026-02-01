@@ -1,6 +1,6 @@
 ---
 name: image-as-design
-description: Analyze UI design images to generate implementation-ready code. Triggers: design to code, mockup to code, UI image analysis, implement this design, screenshot to code.
+description: "Analyze UI design images to generate implementation-ready code. Triggers: design to code, mockup to code, UI image analysis, implement this design, screenshot to code."
 ---
 
 # Image-as-Design: UI Implementation from Images

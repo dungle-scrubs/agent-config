@@ -1,5 +1,6 @@
 ---
-description: MANDATORY for ALL Swift output - files AND conversational snippets. Covers SPM, strict concurrency, Result types, enums with associated values, let over var, async/await, SwiftUI. Trigger: any Swift code, iOS, macOS, Package.swift, Xcode projects. No exceptions.
+name: swift-standards
+description: "MANDATORY for ALL Swift output - files AND conversational snippets. Covers SPM, strict concurrency, Result types, enums with associated values, let over var, async/await, SwiftUI. Trigger: any Swift code, iOS, macOS, Package.swift, Xcode projects. No exceptions."
 ---
 
 # Swift Best Practices

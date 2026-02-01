@@ -1,5 +1,6 @@
 ---
-description: Git conventions for commits, branches, and PRs. Apply when writing commit messages, naming branches, staging files, or creating pull requests.
+name: git
+description: "Git conventions for commits, branches, and PRs. Apply when writing commit messages, naming branches, staging files, or creating pull requests."
 ---
 
 # Git Standards

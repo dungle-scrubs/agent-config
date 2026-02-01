@@ -1,5 +1,6 @@
 ---
-description: React hook patterns and ahooks library usage. Apply when working with React/Preact components to identify hook extraction opportunities and recommend ahooks alternatives to manual implementations.
+name: react-hooks
+description: "React hook patterns and ahooks library usage. Apply when working with React/Preact components to identify hook extraction opportunities and recommend ahooks alternatives to manual implementations."
 ---
 
 # React Hooks - Patterns & ahooks Library

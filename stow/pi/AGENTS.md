@@ -1,5 +1,23 @@
 # Global Instructions
 
+## Bash Tool Guidelines
+
+**Never use `&` with the regular `bash` tool to background processes.** The bash tool waits for stdout/stderr to close, so backgrounded processes that keep writing will cause the command to hang indefinitely.
+
+For daemons, servers, or long-running processes, use `bg_bash` instead:
+```
+# WRONG - will hang:
+bash: "my-daemon start &"
+
+# CORRECT - returns immediately:
+bg_bash: "my-daemon start"
+```
+
+Use `bg_bash` for:
+- Starting daemons or servers
+- Long-running builds or tests
+- Any process you want to run independently
+
 ## Subagents for Parallel & Complex Tasks
 
 Use the `subagent` tool to delegate tasks to specialized agents with isolated context.

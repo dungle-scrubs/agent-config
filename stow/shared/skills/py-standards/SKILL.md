@@ -1,5 +1,6 @@
 ---
-description: MANDATORY for ALL Python output - files AND conversational snippets. Covers uv for package management, ruff for linting/formatting, ty for type checking, and project structure patterns. Trigger: any Python code, packages, dependencies, linting, type hints. No exceptions.
+name: py-standards
+description: "MANDATORY for ALL Python output - files AND conversational snippets. Covers uv for package management, ruff for linting/formatting, ty for type checking, and project structure patterns. Trigger: any Python code, packages, dependencies, linting, type hints. No exceptions."
 ---
 
 # Python Best Practices

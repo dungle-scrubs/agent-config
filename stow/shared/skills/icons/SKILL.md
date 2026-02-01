@@ -1,6 +1,6 @@
 ---
 name: icons
-description: Icon standards - Lucide first, Hero Icons second, Tabler for brands. No custom SVGs. Triggers: icons, icon library, SVG, Lucide, Hero Icons.
+description: "Icon standards - Lucide first, Hero Icons second, Tabler for brands. No custom SVGs. Triggers: icons, icon library, SVG, Lucide, Hero Icons."
 ---
 
 # Icon & SVG Standards

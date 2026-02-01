@@ -1,5 +1,6 @@
 ---
-description: Add information to Obsidian code vault. Use when user says add to notes, save to notes, remember this, or note this down.
+name: obsidian
+description: "Add information to Obsidian code vault. Use when user says add to notes, save to notes, remember this, or note this down."
 ---
 
 # Obsidian Code Vault
