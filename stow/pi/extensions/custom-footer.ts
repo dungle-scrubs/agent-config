@@ -159,8 +159,8 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 					let gitBranch = "";
 					if (gitState?.branch) {
 						const parts: string[] = [];
-						// Branch icon and name
-						parts.push(` ${gitState.branch}`);
+						// Branch icon and name (teal)
+						parts.push(`\x1b[38;2;139;213;202m ${gitState.branch}\x1b[0m`);
 						// Dirty indicator
 						if (gitState.dirty) parts.push(theme.fg("warning", "*"));
 						// Ahead/behind
