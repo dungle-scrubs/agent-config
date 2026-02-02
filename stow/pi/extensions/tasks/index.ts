@@ -181,15 +181,15 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 				switch (task.status) {
 					case "completed":
-						icon = ctx.ui.theme.fg("success", "[✓]");
+						icon = ctx.ui.theme.fg("success", "✓");
 						textStyle = (s) => ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(s));
 						break;
 					case "in_progress":
-						icon = ctx.ui.theme.fg("warning", "[●]"); // Filled circle for active
+						icon = ctx.ui.theme.fg("warning", "▣"); // Filled square for active
 						textStyle = (s) => ctx.ui.theme.fg("accent", s);
 						break;
 					default:
-						icon = "[ ]"; // White/default color
+						icon = "☐"; // Empty ballot box
 						textStyle = (s) => s;
 				}
 
@@ -364,7 +364,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 					}
 					const list = state.tasks
 						.map((t, i) => {
-							const icon = t.status === "completed" ? "[✓]" : t.status === "in_progress" ? "[●]" : "[ ]";
+							const icon = t.status === "completed" ? "✓" : t.status === "in_progress" ? "▣" : "☐";
 							const deps = t.dependencies.length > 0 ? ` (depends on: ${t.dependencies.length} tasks)` : "";
 							return `${i + 1}. ${icon} ${t.title}${deps}`;
 						})

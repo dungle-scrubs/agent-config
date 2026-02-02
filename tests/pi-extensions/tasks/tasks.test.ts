@@ -166,14 +166,14 @@ describe("tasks core", () => {
 		it("should show in-progress task with bullet", () => {
 			addTasksBatch(state, ["Task 1"]);
 			const lines = buildWidgetLines(state, [], mockTheme);
-			expect(lines[1]).toContain("[●]");
+			expect(lines[1]).toContain("▣");
 		});
 
 		it("should show completed task with check", () => {
 			addTasksBatch(state, ["Task 1"]);
 			completeTask(state, 1);
 			const lines = buildWidgetLines(state, [], mockTheme);
-			expect(lines[1]).toContain("[✓]");
+			expect(lines[1]).toContain("✓");
 		});
 
 		it("should include background subagents below tasks", () => {

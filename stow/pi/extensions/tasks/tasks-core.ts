@@ -230,15 +230,15 @@ export function buildWidgetLines(
 
 		switch (task.status) {
 			case "completed":
-				icon = theme.fg("success", "[✓]");
+				icon = theme.fg("success", "✓");
 				text = theme.fg("muted", theme.strikethrough(task.title));
 				break;
 			case "in_progress":
-				icon = theme.fg("warning", "[●]");
+				icon = theme.fg("warning", "▣");
 				text = theme.fg("accent", task.title);
 				break;
 			default:
-				icon = "[ ]";
+				icon = "☐";
 				text = task.title;
 		}
 
