@@ -32,7 +32,8 @@ mkdir -p ~/.pi/agent
 # Stow config files into ~/.pi/agent (preserves runtime data like sessions/, auth.json)
 stow -d "$SCRIPT_DIR/stow/pi" -t ~/.pi/agent .
 
-# Symlink shared resources (commands = prompts in Pi)
+# Symlink shared resources
+ln -sf "$SCRIPT_DIR/stow/shared/instructions.md" ~/.pi/agent/AGENTS.md
 ln -sf "$SCRIPT_DIR/stow/shared/commands" ~/.pi/agent/prompts
 ln -sf "$SCRIPT_DIR/stow/shared/agents" ~/.pi/agent/agents
 
@@ -75,6 +76,7 @@ if [[ -f "$PI_WORK_DIRS_CONFIG" ]]; then
             # Remove non-symlink settings.json if it exists (will be replaced by stow)
             [[ -f "$config_dir/settings.json" && ! -L "$config_dir/settings.json" ]] && rm "$config_dir/settings.json"
             stow -d "$SCRIPT_DIR/stow/pi" -t "$config_dir" .
+            ln -sf "$SCRIPT_DIR/stow/shared/instructions.md" "$config_dir/AGENTS.md"
             ln -sf "$SCRIPT_DIR/stow/shared/commands" "$config_dir/prompts"
             ln -sf "$SCRIPT_DIR/stow/shared/agents" "$config_dir/agents"
             echo "Pi configuration linked to $config_dir"

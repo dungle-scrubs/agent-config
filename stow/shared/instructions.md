@@ -57,7 +57,6 @@ Or user can run `/scaffold` explicitly.
 
 - NEVER add MCP servers directly to Claude Code configuration (~/.claude/.claude.json)
 - Add MCP servers to the tool-proxy system at ~/dev/ai/mcp/apps/
-- Create a new app directory with app.config.json and session script following existing patterns
 - Run the indexer after adding new apps: `cd ~/dev/ai/services/tool-proxy && pnpm index`
 
 ## Tool Proxy Modes
@@ -114,6 +113,45 @@ Format commit lists as tables:
 - Include `@returns` with type and description
 - Add `@throws` when applicable
 - Be proactive: add JSDoc when writing new functions and when modifying existing undocumented functions
+
+## 1Password Credentials with opchain
+
+Use `opchain` to retrieve secrets from 1Password. Never hardcode API keys or credentials.
+
+### Why opchain?
+- Dual-token system: separate read/write permissions
+- Works with service accounts and personal accounts  
+- Integrates with macOS Keychain for token storage
+- Validates op:// references in .env.op files
+
+### Usage
+
+```bash
+# Read a secret
+opchain --read op read "op://Vault/Item/field"
+
+# Example: Get Firecrawl API key
+opchain --read op read "op://Services/firecrawl/api-key"
+
+# List secrets defined in .env.op files
+opchain secrets list [path]
+
+# Validate all op:// references resolve correctly
+opchain secrets check [path]
+```
+
+### Common Vaults
+- `Services` - API keys for external services (Firecrawl, etc.)
+- `Models` - LLM API keys (OpenAI, Anthropic, etc.)
+- `Development` - Dev tools (GitHub PAT, Linear, etc.)
+
+### Setup
+If opchain isn't configured, run:
+```bash
+opchain setup
+```
+
+This stores read/write tokens in macOS Keychain.
 
 ## Secrets Management
 
