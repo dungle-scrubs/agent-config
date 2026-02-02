@@ -697,4 +697,28 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			}
 		},
 	});
+
+	// Intercept bash commands with trailing & and block them
+	// This prevents the common mistake of using `bash &` which hangs forever
+	pi.on("tool_call", async (event, _ctx) => {
+		if (event.toolName !== "bash") return;
+
+		const command = event.input?.command as string | undefined;
+		if (!command) return;
+
+		// Detect trailing & (but not &&, &>, or &>>)
+		// Match: command ending with & preceded by non-& and not followed by > or &
+		const trimmed = command.trim();
+		const hasTrailingAmpersand = /(?<!&)&\s*$/.test(trimmed) && !trimmed.endsWith("&&");
+
+		if (hasTrailingAmpersand) {
+			return {
+				block: true,
+				reason:
+					"Cannot use & to background processes in bash - it will hang forever.\n" +
+					"Use the bg_bash tool instead:\n\n" +
+					`  bg_bash: ${trimmed.replace(/&\s*$/, "").trim()}`,
+			};
+		}
+	});
 }
