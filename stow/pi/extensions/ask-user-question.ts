@@ -1,5 +1,5 @@
 /**
- * Question Tool - Single question with options
+ * Ask User Question Tool - Single question with options
  * Full custom UI: options list + inline editor for "Type something..."
  * Escape in editor returns to options, Escape in options cancels
  */
@@ -17,7 +17,7 @@ interface OptionWithDesc {
 /** Display option including the "Type something" option */
 type DisplayOption = OptionWithDesc & { isOther?: boolean };
 
-/** Details returned from the question tool execution */
+/** Details returned from the ask_user_question tool execution */
 interface QuestionDetails {
 	question: string;
 	options: string[];
@@ -37,14 +37,14 @@ const QuestionParams = Type.Object({
 });
 
 /**
- * Registers the question tool with Pi.
+ * Registers the ask_user_question tool with Pi.
  * Provides an interactive UI for asking users questions with selectable options.
  * @param pi - The Pi extension API
  */
-export default function question(pi: ExtensionAPI) {
+export default function askUserQuestion(pi: ExtensionAPI) {
 	pi.registerTool({
-		name: "question",
-		label: "Question",
+		name: "ask_user_question",
+		label: "Ask User Question",
 		description: `Ask the user a question and let them pick from options. Use when you need user input to proceed.
 
 WHEN TO USE:
@@ -60,7 +60,7 @@ WHEN NOT TO USE:
 		parameters: QuestionParams,
 
 		/**
-		 * Executes the question tool, displaying an interactive selection UI.
+		 * Executes the ask_user_question tool, displaying an interactive selection UI.
 		 * @param _toolCallId - Unique identifier for this tool call
 		 * @param params - The question and options to display
 		 * @param _onUpdate - Callback for streaming updates (unused)
@@ -274,7 +274,7 @@ WHEN NOT TO USE:
 		 * @returns Text element for display
 		 */
 		renderCall(args, theme) {
-			let text = theme.fg("toolTitle", theme.bold("question ")) + theme.fg("muted", args.question);
+			let text = theme.fg("toolTitle", theme.bold("ask_user_question ")) + theme.fg("muted", args.question);
 			const opts = Array.isArray(args.options) ? args.options : [];
 			if (opts.length) {
 				const labels = opts.map((o: OptionWithDesc) => o.label);
