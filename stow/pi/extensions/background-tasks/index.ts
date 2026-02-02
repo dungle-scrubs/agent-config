@@ -54,8 +54,9 @@ interface BackgroundTask {
 const MAX_OUTPUT_BYTES = 1024 * 1024; // 1MB max buffered output per task
 const MAX_TASKS = 20; // Max concurrent/recent tasks
 
-// Global task registry
+// Global task registry (exposed via globalThis for tasks extension to read)
 const tasks = new Map<string, BackgroundTask>();
+(globalThis as any).__piBackgroundTasks = tasks;
 let taskCounter = 0;
 
 function generateTaskId(): string {
@@ -94,33 +95,17 @@ function truncateCommand(cmd: string, maxLen = 40): string {
 }
 
 export default function backgroundTasksExtension(pi: ExtensionAPI): void {
-	// Update status widget
+	// Update status widget (widget rendering delegated to tasks extension via __piBackgroundTasks)
 	function updateWidget(ctx: ExtensionContext): void {
 		const running = [...tasks.values()].filter((t) => t.status === "running");
 
 		if (running.length === 0) {
 			ctx.ui.setStatus("bg-tasks", undefined);
-			ctx.ui.setWidget("bg-tasks", undefined);
 			return;
 		}
 
-		// Status bar - cyan color (using 256 color 81 = #5fd7ff)
+		// Status bar only - widget is rendered by tasks extension
 		ctx.ui.setStatus("bg-tasks", `${FG_PURPLE}⚙ ${running.length} bg${RESET_ALL}`);
-
-		// Widget showing running tasks - use cyan color (256 color 81 = #5fd7ff)
-		const lines: string[] = [`${FG_PURPLE_MUTED}Background Tasks (${running.length})${RESET_ALL}`];
-
-		for (const task of running.slice(0, 5)) {
-			const duration = formatDuration(Date.now() - task.startTime);
-			const cmd = truncateCommand(task.command, 35);
-			lines.push(`${FG_PURPLE}●${RESET_ALL} ${cmd} ${ctx.ui.theme.fg("muted", `(${duration})`)}`);
-		}
-
-		if (running.length > 5) {
-			lines.push(ctx.ui.theme.fg("muted", `  ... and ${running.length - 5} more`));
-		}
-
-		ctx.ui.setWidget("bg-tasks", lines);
 	}
 
 	// Tool: Run bash in background
@@ -683,9 +668,8 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		tasks.clear();
 	});
 
-	// Update widget on session start - clear any stale widgets first
+	// Update status on session start (widget rendering delegated to tasks extension)
 	pi.on("session_start", async (_event, ctx) => {
-		ctx.ui.setWidget("bg-tasks", undefined);
 		ctx.ui.setStatus("bg-tasks", undefined);
 		updateWidget(ctx);
 	});

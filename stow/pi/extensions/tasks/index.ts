@@ -253,6 +253,39 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	}
 
 	/**
+	 * Render background bash task lines
+	 */
+	function renderBgBashLines(ctx: ExtensionContext, maxCmdLen: number): string[] {
+		const bgTasksMap = (globalThis as any).__piBackgroundTasks as Map<string, any> | undefined;
+		if (!bgTasksMap) return [];
+
+		const running = [...bgTasksMap.values()].filter((t: any) => t.status === "running");
+		if (running.length === 0) return [];
+
+		const lines: string[] = [];
+		lines.push(ctx.ui.theme.fg("accent", `Background Tasks (${running.length})`));
+
+		for (let i = 0; i < Math.min(running.length, 5); i++) {
+			const task = running[i];
+			const isLast = i === Math.min(running.length, 5) - 1 && running.length <= 5;
+			const treeChar = isLast ? "└─" : "├─";
+			const ms = Date.now() - task.startTime;
+			const secs = Math.floor(ms / 1000);
+			const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
+			const cmd = task.command.length > maxCmdLen ? `${task.command.slice(0, maxCmdLen - 3)}...` : task.command;
+			lines.push(
+				`${ctx.ui.theme.fg("muted", treeChar)} ${ctx.ui.theme.fg("accent", "●")} ${cmd} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
+			);
+		}
+
+		if (running.length > 5) {
+			lines.push(ctx.ui.theme.fg("muted", `└─ ... and ${running.length - 5} more`));
+		}
+
+		return lines;
+	}
+
+	/**
 	 * Pad a line to a specific visible width (accounting for ANSI codes)
 	 */
 	function padToWidth(line: string, targetWidth: number): string {
@@ -264,7 +297,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	}
 
 	/**
-	 * Merge two column arrays into side-by-side lines
+	 * Merge two column arrays into side-by-side lines, with right column bottom-aligned
 	 */
 	function mergeSideBySide(
 		leftLines: string[],
@@ -275,9 +308,13 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		const maxRows = Math.max(leftLines.length, rightLines.length);
 		const result: string[] = [];
 
+		// Bottom-align: pad right column at the top
+		const rightPadding = maxRows - rightLines.length;
+
 		for (let i = 0; i < maxRows; i++) {
 			const left = leftLines[i] ?? "";
-			const right = rightLines[i] ?? "";
+			const rightIndex = i - rightPadding;
+			const right = rightIndex >= 0 ? (rightLines[rightIndex] ?? "") : "";
 			result.push(padToWidth(left, leftWidth) + separator + right);
 		}
 
@@ -288,14 +325,18 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		// Check for foreground (sync) and background subagents
 		const fgSubagentsMap = (globalThis as any).__piRunningSubagents as Map<string, any> | undefined;
 		const bgSubagentsMap = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
+		const bgTasksMap = (globalThis as any).__piBackgroundTasks as Map<string, any> | undefined;
 
 		const fgRunning = fgSubagentsMap ? [...fgSubagentsMap.values()] : [];
 		const bgRunning = bgSubagentsMap ? [...bgSubagentsMap.values()].filter((s: any) => s.status === "running") : [];
+		const bgTasks = bgTasksMap ? [...bgTasksMap.values()].filter((t: any) => t.status === "running") : [];
 
 		const hasSubagents = fgRunning.length > 0 || bgRunning.length > 0;
+		const hasBgTasks = bgTasks.length > 0;
+		const hasRightColumn = hasSubagents || hasBgTasks;
 		const hasTasks = state.tasks.length > 0;
 
-		if (!state.visible || (!hasTasks && !hasSubagents)) {
+		if (!state.visible || (!hasTasks && !hasRightColumn)) {
 			if (lastWidgetContent !== "") {
 				ctx.ui.setWidget("1-tasks", undefined);
 				lastWidgetContent = "";
@@ -309,10 +350,11 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		const taskStates = state.tasks.map((t) => `${t.id}:${t.status}`).join(",");
 		const fgIds = fgRunning.map((s: any) => s.id).join(",");
 		const bgIds = bgRunning.map((s: any) => s.id).join(",");
-		const stableKey = `${taskStates}|${fgIds}|${bgIds}`;
+		const bgTaskIds = bgTasks.map((t: any) => t.id).join(",");
+		const stableKey = `${taskStates}|${fgIds}|${bgIds}|${bgTaskIds}`;
 
-		// Only update when structure changes or subagents running (for animation)
-		if (!hasSubagents && stableKey === lastWidgetContent) {
+		// Only update when structure changes or background items running (for animation)
+		if (!hasRightColumn && stableKey === lastWidgetContent) {
 			return;
 		}
 		lastWidgetContent = stableKey;
@@ -320,27 +362,38 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		// Use function form of setWidget for responsive width-based layout
 		ctx.ui.setWidget("1-tasks", (_tui, _theme) => ({
 			render(width: number): string[] {
-				const useSideBySide = width >= MIN_SIDE_BY_SIDE_WIDTH && hasTasks && hasSubagents;
+				const useSideBySide = width >= MIN_SIDE_BY_SIDE_WIDTH && hasTasks && hasRightColumn;
 
 				if (useSideBySide) {
-					// Side-by-side: tasks on left, subagents on right
+					// Side-by-side: tasks on left, subagents + bg tasks on right (bottom-aligned)
 					const separator = ctx.ui.theme.fg("muted", "  │  ");
 					const separatorWidth = 5; // "  │  " is 5 visible chars
 					const columnWidth = Math.floor((width - separatorWidth) / 2);
 
 					// Adjust max lengths for column width
-					const maxTitleLen = Math.max(20, columnWidth - 8); // Account for tree chars, icon, padding
-					const maxTaskPreviewLen = Math.max(15, columnWidth - 25); // Account for agent name, duration, etc.
+					const maxTitleLen = Math.max(20, columnWidth - 8);
+					const maxTaskPreviewLen = Math.max(15, columnWidth - 25);
+					const maxCmdLen = Math.max(15, columnWidth - 15);
 
 					const taskLines = renderTaskLines(ctx, maxTitleLen);
-					const subagentLines = renderSubagentLines(ctx, spinner, fgRunning, bgRunning, maxTaskPreviewLen, true);
 
-					return mergeSideBySide(taskLines, subagentLines, columnWidth, separator);
+					// Build right column: subagents on top, bg tasks on bottom
+					const rightLines: string[] = [];
+					if (hasSubagents) {
+						rightLines.push(...renderSubagentLines(ctx, spinner, fgRunning, bgRunning, maxTaskPreviewLen, true));
+					}
+					if (hasBgTasks) {
+						if (hasSubagents) rightLines.push(""); // Spacer
+						rightLines.push(...renderBgBashLines(ctx, maxCmdLen));
+					}
+
+					return mergeSideBySide(taskLines, rightLines, columnWidth, separator);
 				}
 
 				// Stacked layout (narrow terminal or only one section)
 				const maxTitleLen = 50;
 				const maxTaskPreviewLen = 35;
+				const maxCmdLen = 40;
 				const lines: string[] = [];
 
 				if (hasTasks) {
@@ -348,8 +401,13 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 				}
 
 				if (hasSubagents) {
-					if (hasTasks) lines.push(""); // Spacer between sections
+					if (lines.length > 0) lines.push(""); // Spacer
 					lines.push(...renderSubagentLines(ctx, spinner, fgRunning, bgRunning, maxTaskPreviewLen, !hasTasks));
+				}
+
+				if (hasBgTasks) {
+					if (lines.length > 0) lines.push(""); // Spacer
+					lines.push(...renderBgBashLines(ctx, maxCmdLen));
 				}
 
 				return lines;
@@ -840,13 +898,14 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 		};
 	});
 
-	// Interval for updating background subagents display
+	// Interval for updating background subagents/tasks display
 	// Store interval on globalThis so we can clear it across reloads
 	const G = globalThis as any;
 	if (G.__piTasksInterval) {
 		clearInterval(G.__piTasksInterval);
 	}
 	let lastBgCount = 0;
+	let lastBgTaskCount = 0;
 
 	// Restore state on session start
 	pi.on("session_start", async (_event, ctx) => {
@@ -865,21 +924,24 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 
 		updateWidget(ctx);
 
-		// Start interval to animate subagents
+		// Start interval to animate subagents and background tasks
 		if (G.__piTasksInterval) clearInterval(G.__piTasksInterval);
 		G.__piTasksInterval = setInterval(() => {
 			const fgSubagents = (globalThis as any).__piRunningSubagents as Map<string, any> | undefined;
 			const bgSubagents = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
+			const bgTasks = (globalThis as any).__piBackgroundTasks as Map<string, any> | undefined;
 
 			const fgRunning = fgSubagents ? fgSubagents.size : 0;
 			const bgRunning = bgSubagents ? [...bgSubagents.values()].filter((s: any) => s.status === "running").length : 0;
+			const bgTaskRunning = bgTasks ? [...bgTasks.values()].filter((t: any) => t.status === "running").length : 0;
 
-			const hasRunning = fgRunning > 0 || bgRunning > 0;
+			const hasRunning = fgRunning > 0 || bgRunning > 0 || bgTaskRunning > 0;
 
-			// Update on every tick when subagents running (for animation), or when count changes
-			if (hasRunning || bgRunning !== lastBgCount) {
+			// Update on every tick when background items running (for animation), or when count changes
+			if (hasRunning || bgRunning !== lastBgCount || bgTaskRunning !== lastBgTaskCount) {
 				spinnerFrame++;
 				lastBgCount = bgRunning;
+				lastBgTaskCount = bgTaskRunning;
 				updateWidget(ctx);
 			}
 		}, 200); // Faster interval for smoother animation
