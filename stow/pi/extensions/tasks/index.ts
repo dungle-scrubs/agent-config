@@ -137,19 +137,29 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	// Render the task widget
 	let lastWidgetContent = "";
 
-	function updateWidget(ctx: ExtensionContext): void {
-		// Check for background subagents even if no tasks
-		const bgSubagentsMap = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
-		const bgRunning = bgSubagentsMap ? [...bgSubagentsMap.values()].filter((s: any) => s.status === "running") : [];
-		const hasBgSubagents = bgRunning.length > 0;
+	// Spinner frames for animation
+	const SPINNER_FRAMES = ["◐", "◓", "◑", "◒"];
+	let spinnerFrame = 0;
 
-		if (!state.visible || (state.tasks.length === 0 && !hasBgSubagents)) {
+	function updateWidget(ctx: ExtensionContext): void {
+		// Check for foreground (sync) and background subagents
+		const fgSubagentsMap = (globalThis as any).__piRunningSubagents as Map<string, any> | undefined;
+		const bgSubagentsMap = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
+
+		const fgRunning = fgSubagentsMap ? [...fgSubagentsMap.values()] : [];
+		const bgRunning = bgSubagentsMap ? [...bgSubagentsMap.values()].filter((s: any) => s.status === "running") : [];
+
+		const hasSubagents = fgRunning.length > 0 || bgRunning.length > 0;
+
+		if (!state.visible || (state.tasks.length === 0 && !hasSubagents)) {
 			if (lastWidgetContent !== "") {
 				ctx.ui.setWidget("1-tasks", undefined);
 				lastWidgetContent = "";
 			}
 			return;
 		}
+
+		const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length];
 
 		// Calculate how many tasks to show based on reasonable limits
 		const maxVisible = Math.min(10, state.tasks.length);
@@ -195,39 +205,60 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 			}
 		}
 
-		// Append background subagents from subagent extension (via shared global)
-		if (hasBgSubagents) {
-			if (lines.length > 0) lines.push(""); // Spacer only if tasks exist
-			lines.push(
-				`${ctx.ui.theme.fg("accent", `Background Subagents`)} ${ctx.ui.theme.fg("success", `● ${bgRunning.length} running`)}`
-			);
+		// Foreground (sync) subagents - currently running in main thread
+		if (fgRunning.length > 0) {
+			if (lines.length > 0) lines.push("");
+			lines.push(`${ctx.ui.theme.fg("accent", "Subagents")} ${ctx.ui.theme.fg("warning", `${spinner} ${fgRunning.length} running`)}`);
 
-			for (let i = 0; i < bgRunning.length; i++) {
-				const sub = bgRunning[i];
-				const isLast = i === bgRunning.length - 1;
+			for (let i = 0; i < fgRunning.length; i++) {
+				const sub = fgRunning[i];
+				const isLast = i === fgRunning.length - 1 && bgRunning.length === 0;
 				const treeChar = isLast ? "└─" : "├─";
 				const ms = Date.now() - sub.startTime;
 				const secs = Math.floor(ms / 1000);
 				const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
 				const taskPreview = sub.task.length > 35 ? `${sub.task.slice(0, 32)}...` : sub.task;
 				lines.push(
-					`${ctx.ui.theme.fg("accent", treeChar)} ${ctx.ui.theme.fg("success", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
+					`${ctx.ui.theme.fg("muted", treeChar)} ${ctx.ui.theme.fg("warning", spinner)} ${ctx.ui.theme.fg("accent", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
 				);
 			}
 		}
 
-		// Build stable key (exclude changing durations)
-		const taskStates = state.tasks.map((t) => `${t.id}:${t.status}`).join(",");
-		const bgIds = bgRunning.map((s: any) => s.id).join(",");
-		const stableKey = `${taskStates}|${bgIds}`;
+		// Background subagents
+		if (bgRunning.length > 0) {
+			if (lines.length > 0 && fgRunning.length === 0) lines.push("");
+			if (fgRunning.length === 0) {
+				lines.push(`${ctx.ui.theme.fg("accent", "Background Subagents")} ${ctx.ui.theme.fg("success", `${spinner} ${bgRunning.length} running`)}`);
+			} else {
+				lines.push(`${ctx.ui.theme.fg("muted", "├─")} ${ctx.ui.theme.fg("dim", "background:")}`);
+			}
 
-		// Only call setWidget if structure changed (prevents flicker)
-		if (stableKey !== lastWidgetContent) {
+			for (let i = 0; i < bgRunning.length; i++) {
+				const sub = bgRunning[i];
+				const isLast = i === bgRunning.length - 1;
+				const treeChar = isLast ? "└─" : "├─";
+				const indent = fgRunning.length > 0 ? "│  " : "";
+				const ms = Date.now() - sub.startTime;
+				const secs = Math.floor(ms / 1000);
+				const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
+				const taskPreview = sub.task.length > 35 ? `${sub.task.slice(0, 32)}...` : sub.task;
+				lines.push(
+					`${ctx.ui.theme.fg("muted", indent + treeChar)} ${ctx.ui.theme.fg("success", spinner)} ${ctx.ui.theme.fg("accent", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
+				);
+			}
+		}
+
+		// Build stable key for structure changes
+		const taskStates = state.tasks.map((t) => `${t.id}:${t.status}`).join(",");
+		const fgIds = fgRunning.map((s: any) => s.id).join(",");
+		const bgIds = bgRunning.map((s: any) => s.id).join(",");
+		const stableKey = `${taskStates}|${fgIds}|${bgIds}`;
+
+		// Always update when subagents running (for animation), otherwise only on structure change
+		if (hasSubagents || stableKey !== lastWidgetContent) {
 			ctx.ui.setWidget("1-tasks", lines);
 			lastWidgetContent = stableKey;
 		}
-
-		// No status bar indicator - widget is enough
 	}
 
 	// Persist state
@@ -735,18 +766,24 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 
 		updateWidget(ctx);
 
-		// Start interval to check for background subagents
+		// Start interval to animate subagents
 		if (G.__piTasksInterval) clearInterval(G.__piTasksInterval);
 		G.__piTasksInterval = setInterval(() => {
+			const fgSubagents = (globalThis as any).__piRunningSubagents as Map<string, any> | undefined;
 			const bgSubagents = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
+
+			const fgRunning = fgSubagents ? fgSubagents.size : 0;
 			const bgRunning = bgSubagents ? [...bgSubagents.values()].filter((s: any) => s.status === "running").length : 0;
 
-			// Only update if bg count changed
-			if (bgRunning !== lastBgCount) {
+			const hasRunning = fgRunning > 0 || bgRunning > 0;
+
+			// Update on every tick when subagents running (for animation), or when count changes
+			if (hasRunning || bgRunning !== lastBgCount) {
+				spinnerFrame++;
 				lastBgCount = bgRunning;
 				updateWidget(ctx);
 			}
-		}, 1000);
+		}, 200); // Faster interval for smoother animation
 	});
 
 	// Cleanup on session end

@@ -66,6 +66,7 @@ const backgroundSubagents = new Map<string, BackgroundSubagent>();
 
 // Export to global for tasks extension to read
 (globalThis as any).__piBackgroundSubagents = backgroundSubagents;
+(globalThis as any).__piRunningSubagents = runningSubagents;
 const _backgroundRequested = false;
 
 // Background subagents are rendered by tasks extension via shared global
