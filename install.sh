@@ -36,6 +36,7 @@ stow -d "$SCRIPT_DIR/stow/pi" -t ~/.pi/agent .
 ln -sf "$SCRIPT_DIR/stow/shared/instructions.md" ~/.pi/agent/AGENTS.md
 ln -sf "$SCRIPT_DIR/stow/shared/commands" ~/.pi/agent/prompts
 ln -sf "$SCRIPT_DIR/stow/shared/agents" ~/.pi/agent/agents
+ln -sf "$SCRIPT_DIR/stow/shared/skills" ~/.pi/agent/skills
 
 echo "Pi configuration linked to ~/.pi/agent/"
 
@@ -79,6 +80,7 @@ if [[ -f "$PI_WORK_DIRS_CONFIG" ]]; then
             ln -sf "$SCRIPT_DIR/stow/shared/instructions.md" "$config_dir/AGENTS.md"
             ln -sf "$SCRIPT_DIR/stow/shared/commands" "$config_dir/prompts"
             ln -sf "$SCRIPT_DIR/stow/shared/agents" "$config_dir/agents"
+            ln -sf "$SCRIPT_DIR/stow/shared/skills" "$config_dir/skills"
             echo "Pi configuration linked to $config_dir"
         fi
     done < "$PI_WORK_DIRS_CONFIG"
