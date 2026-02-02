@@ -224,7 +224,10 @@ export function buildWidgetLines(
 	const maxVisible = Math.min(10, state.tasks.length);
 	const visibleTasks = state.tasks.slice(0, maxVisible);
 
-	for (const task of visibleTasks) {
+	for (let i = 0; i < visibleTasks.length; i++) {
+		const task = visibleTasks[i];
+		const isLast = i === visibleTasks.length - 1 && state.tasks.length <= maxVisible;
+		const treeChar = isLast ? "└─" : "├─";
 		let icon: string;
 		let text: string;
 
@@ -245,11 +248,11 @@ export function buildWidgetLines(
 		const maxLen = 50;
 		const _title = task.title.length > maxLen ? `${task.title.substring(0, maxLen - 3)}...` : task.title;
 
-		lines.push(`${icon} ${text}`);
+		lines.push(`${theme.fg("muted", treeChar)} ${icon} ${text}`);
 	}
 
 	if (state.tasks.length > maxVisible) {
-		lines.push(theme.fg("muted", `  ... and ${state.tasks.length - maxVisible} more`));
+		lines.push(theme.fg("muted", `└─ ... and ${state.tasks.length - maxVisible} more`));
 	}
 
 	// Background subagents

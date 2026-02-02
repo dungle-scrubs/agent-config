@@ -175,7 +175,10 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 			lines.push(ctx.ui.theme.fg("accent", `Tasks (${completed}/${state.tasks.length})`));
 
-			for (const task of visibleTasks) {
+			for (let i = 0; i < visibleTasks.length; i++) {
+				const task = visibleTasks[i];
+				const isLast = i === visibleTasks.length - 1 && state.tasks.length <= maxVisible;
+				const treeChar = isLast ? "└─" : "├─";
 				let icon: string;
 				let textStyle: (s: string) => string;
 
@@ -197,11 +200,11 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 				const maxLen = 50;
 				const title = task.title.length > maxLen ? `${task.title.substring(0, maxLen - 3)}...` : task.title;
 
-				lines.push(`${icon} ${textStyle(title)}`);
+				lines.push(`${ctx.ui.theme.fg("muted", treeChar)} ${icon} ${textStyle(title)}`);
 			}
 
 			if (state.tasks.length > maxVisible) {
-				lines.push(ctx.ui.theme.fg("muted", `  ... and ${state.tasks.length - maxVisible} more`));
+				lines.push(ctx.ui.theme.fg("muted", `└─ ... and ${state.tasks.length - maxVisible} more`));
 			}
 		}
 
