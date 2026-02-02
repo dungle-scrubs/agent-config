@@ -1,3 +1,24 @@
+## ⚠️ CRITICAL: Background Processes
+
+**NEVER use `bash` with `&` to background a process. It WILL hang.**
+
+```bash
+# WRONG - will hang forever
+bash: npm run dev &
+
+# CORRECT - use bg_bash tool
+bg_bash: npm run dev
+```
+
+Always use the `bg_bash` tool for:
+- Starting servers or daemons
+- Long-running builds or tests
+- Any process that should run independently
+
+The `bg_bash` tool returns immediately with a task ID. Use `task_output` to check results.
+
+---
+
 ## Dev Server Ports
 
 Projects with explicitly assigned ports (to avoid conflicts):
