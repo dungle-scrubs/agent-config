@@ -16,8 +16,11 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Key } from "@mariozechner/pi-tui";
+import { Key, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
+
+// Minimum width for side-by-side layout (tasks left, subagents right)
+const MIN_SIDE_BY_SIDE_WIDTH = 120;
 
 // Task states
 type TaskStatus = "pending" | "in_progress" | "completed";
@@ -141,77 +144,71 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	const SPINNER_FRAMES = ["◐", "◓", "◑", "◒"];
 	let spinnerFrame = 0;
 
-	function updateWidget(ctx: ExtensionContext): void {
-		// Check for foreground (sync) and background subagents
-		const fgSubagentsMap = (globalThis as any).__piRunningSubagents as Map<string, any> | undefined;
-		const bgSubagentsMap = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
+	/**
+	 * Render task list lines (left column in side-by-side mode)
+	 */
+	function renderTaskLines(ctx: ExtensionContext, maxTitleLen: number): string[] {
+		if (state.tasks.length === 0) return [];
 
-		const fgRunning = fgSubagentsMap ? [...fgSubagentsMap.values()] : [];
-		const bgRunning = bgSubagentsMap ? [...bgSubagentsMap.values()].filter((s: any) => s.status === "running") : [];
-
-		const hasSubagents = fgRunning.length > 0 || bgRunning.length > 0;
-
-		if (!state.visible || (state.tasks.length === 0 && !hasSubagents)) {
-			if (lastWidgetContent !== "") {
-				ctx.ui.setWidget("1-tasks", undefined);
-				lastWidgetContent = "";
-			}
-			return;
-		}
-
-		const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length];
-
-		// Calculate how many tasks to show based on reasonable limits
+		const lines: string[] = [];
+		const completed = state.tasks.filter((t) => t.status === "completed").length;
 		const maxVisible = Math.min(10, state.tasks.length);
 		const visibleTasks = state.tasks.slice(0, maxVisible);
 
-		const lines: string[] = [];
+		lines.push(ctx.ui.theme.fg("accent", `Tasks (${completed}/${state.tasks.length})`));
 
-		// Only show task header and list if there are tasks
-		if (state.tasks.length > 0) {
-			const _pending = state.tasks.filter((t) => t.status === "pending").length;
-			const _inProgress = state.tasks.filter((t) => t.status === "in_progress").length;
-			const completed = state.tasks.filter((t) => t.status === "completed").length;
+		for (let i = 0; i < visibleTasks.length; i++) {
+			const task = visibleTasks[i];
+			const isLast = i === visibleTasks.length - 1 && state.tasks.length <= maxVisible;
+			const treeChar = isLast ? "└─" : "├─";
+			let icon: string;
+			let textStyle: (s: string) => string;
 
-			lines.push(ctx.ui.theme.fg("accent", `Tasks (${completed}/${state.tasks.length})`));
-
-			for (let i = 0; i < visibleTasks.length; i++) {
-				const task = visibleTasks[i];
-				const isLast = i === visibleTasks.length - 1 && state.tasks.length <= maxVisible;
-				const treeChar = isLast ? "└─" : "├─";
-				let icon: string;
-				let textStyle: (s: string) => string;
-
-				switch (task.status) {
-					case "completed":
-						icon = ctx.ui.theme.fg("success", "✓");
-						textStyle = (s) => ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(s));
-						break;
-					case "in_progress":
-						icon = ctx.ui.theme.fg("warning", "▣"); // Filled square for active
-						textStyle = (s) => ctx.ui.theme.fg("accent", s);
-						break;
-					default:
-						icon = "☐"; // Empty ballot box
-						textStyle = (s) => s;
-				}
-
-				// Truncate long task titles
-				const maxLen = 50;
-				const title = task.title.length > maxLen ? `${task.title.substring(0, maxLen - 3)}...` : task.title;
-
-				lines.push(`${ctx.ui.theme.fg("muted", treeChar)} ${icon} ${textStyle(title)}`);
+			switch (task.status) {
+				case "completed":
+					icon = ctx.ui.theme.fg("success", "✓");
+					textStyle = (s) => ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(s));
+					break;
+				case "in_progress":
+					icon = ctx.ui.theme.fg("warning", "▣");
+					textStyle = (s) => ctx.ui.theme.fg("accent", s);
+					break;
+				default:
+					icon = "☐";
+					textStyle = (s) => s;
 			}
 
-			if (state.tasks.length > maxVisible) {
-				lines.push(ctx.ui.theme.fg("muted", `└─ ... and ${state.tasks.length - maxVisible} more`));
-			}
+			const title = task.title.length > maxTitleLen ? `${task.title.substring(0, maxTitleLen - 3)}...` : task.title;
+			lines.push(`${ctx.ui.theme.fg("muted", treeChar)} ${icon} ${textStyle(title)}`);
 		}
 
-		// Foreground (sync) subagents - currently running in main thread
+		if (state.tasks.length > maxVisible) {
+			lines.push(ctx.ui.theme.fg("muted", `└─ ... and ${state.tasks.length - maxVisible} more`));
+		}
+
+		return lines;
+	}
+
+	/**
+	 * Render subagent lines (right column in side-by-side mode, or below tasks in stacked mode)
+	 */
+	function renderSubagentLines(
+		ctx: ExtensionContext,
+		spinner: string,
+		fgRunning: any[],
+		bgRunning: any[],
+		maxTaskPreviewLen: number,
+		standalone: boolean
+	): string[] {
+		if (fgRunning.length === 0 && bgRunning.length === 0) return [];
+
+		const lines: string[] = [];
+
+		// Foreground (sync) subagents
 		if (fgRunning.length > 0) {
-			if (lines.length > 0) lines.push("");
-			lines.push(`${ctx.ui.theme.fg("accent", "Subagents")} ${ctx.ui.theme.fg("warning", `${spinner} ${fgRunning.length} running`)}`);
+			lines.push(
+				`${ctx.ui.theme.fg("accent", "Subagents")} ${ctx.ui.theme.fg("warning", `${spinner} ${fgRunning.length} running`)}`
+			);
 
 			for (let i = 0; i < fgRunning.length; i++) {
 				const sub = fgRunning[i];
@@ -220,7 +217,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 				const ms = Date.now() - sub.startTime;
 				const secs = Math.floor(ms / 1000);
 				const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
-				const taskPreview = sub.task.length > 35 ? `${sub.task.slice(0, 32)}...` : sub.task;
+				const taskPreview = sub.task.length > maxTaskPreviewLen ? `${sub.task.slice(0, maxTaskPreviewLen - 3)}...` : sub.task;
 				lines.push(
 					`${ctx.ui.theme.fg("muted", treeChar)} ${ctx.ui.theme.fg("warning", spinner)} ${ctx.ui.theme.fg("accent", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
 				);
@@ -229,9 +226,10 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 		// Background subagents
 		if (bgRunning.length > 0) {
-			if (lines.length > 0 && fgRunning.length === 0) lines.push("");
 			if (fgRunning.length === 0) {
-				lines.push(`${ctx.ui.theme.fg("accent", "Background Subagents")} ${ctx.ui.theme.fg("success", `${spinner} ${bgRunning.length} running`)}`);
+				lines.push(
+					`${ctx.ui.theme.fg("accent", "Background Subagents")} ${ctx.ui.theme.fg("success", `${spinner} ${bgRunning.length} running`)}`
+				);
 			} else {
 				lines.push(`${ctx.ui.theme.fg("muted", "├─")} ${ctx.ui.theme.fg("dim", "background:")}`);
 			}
@@ -244,12 +242,68 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 				const ms = Date.now() - sub.startTime;
 				const secs = Math.floor(ms / 1000);
 				const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
-				const taskPreview = sub.task.length > 35 ? `${sub.task.slice(0, 32)}...` : sub.task;
+				const taskPreview = sub.task.length > maxTaskPreviewLen ? `${sub.task.slice(0, maxTaskPreviewLen - 3)}...` : sub.task;
 				lines.push(
 					`${ctx.ui.theme.fg("muted", indent + treeChar)} ${ctx.ui.theme.fg("success", spinner)} ${ctx.ui.theme.fg("accent", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
 				);
 			}
 		}
+
+		return lines;
+	}
+
+	/**
+	 * Pad a line to a specific visible width (accounting for ANSI codes)
+	 */
+	function padToWidth(line: string, targetWidth: number): string {
+		const currentWidth = visibleWidth(line);
+		if (currentWidth >= targetWidth) {
+			return truncateToWidth(line, targetWidth, "");
+		}
+		return line + " ".repeat(targetWidth - currentWidth);
+	}
+
+	/**
+	 * Merge two column arrays into side-by-side lines
+	 */
+	function mergeSideBySide(
+		leftLines: string[],
+		rightLines: string[],
+		leftWidth: number,
+		separator: string
+	): string[] {
+		const maxRows = Math.max(leftLines.length, rightLines.length);
+		const result: string[] = [];
+
+		for (let i = 0; i < maxRows; i++) {
+			const left = leftLines[i] ?? "";
+			const right = rightLines[i] ?? "";
+			result.push(padToWidth(left, leftWidth) + separator + right);
+		}
+
+		return result;
+	}
+
+	function updateWidget(ctx: ExtensionContext): void {
+		// Check for foreground (sync) and background subagents
+		const fgSubagentsMap = (globalThis as any).__piRunningSubagents as Map<string, any> | undefined;
+		const bgSubagentsMap = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
+
+		const fgRunning = fgSubagentsMap ? [...fgSubagentsMap.values()] : [];
+		const bgRunning = bgSubagentsMap ? [...bgSubagentsMap.values()].filter((s: any) => s.status === "running") : [];
+
+		const hasSubagents = fgRunning.length > 0 || bgRunning.length > 0;
+		const hasTasks = state.tasks.length > 0;
+
+		if (!state.visible || (!hasTasks && !hasSubagents)) {
+			if (lastWidgetContent !== "") {
+				ctx.ui.setWidget("1-tasks", undefined);
+				lastWidgetContent = "";
+			}
+			return;
+		}
+
+		const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length];
 
 		// Build stable key for structure changes
 		const taskStates = state.tasks.map((t) => `${t.id}:${t.status}`).join(",");
@@ -257,11 +311,53 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		const bgIds = bgRunning.map((s: any) => s.id).join(",");
 		const stableKey = `${taskStates}|${fgIds}|${bgIds}`;
 
-		// Always update when subagents running (for animation), otherwise only on structure change
-		if (hasSubagents || stableKey !== lastWidgetContent) {
-			ctx.ui.setWidget("1-tasks", lines);
-			lastWidgetContent = stableKey;
+		// Only update when structure changes or subagents running (for animation)
+		if (!hasSubagents && stableKey === lastWidgetContent) {
+			return;
 		}
+		lastWidgetContent = stableKey;
+
+		// Use function form of setWidget for responsive width-based layout
+		ctx.ui.setWidget("1-tasks", (_tui, _theme) => ({
+			render(width: number): string[] {
+				const useSideBySide = width >= MIN_SIDE_BY_SIDE_WIDTH && hasTasks && hasSubagents;
+
+				if (useSideBySide) {
+					// Side-by-side: tasks on left, subagents on right
+					const separator = "  │  ";
+					const separatorWidth = visibleWidth(separator);
+					const columnWidth = Math.floor((width - separatorWidth) / 2);
+
+					// Adjust max lengths for column width
+					const maxTitleLen = Math.max(20, columnWidth - 8); // Account for tree chars, icon, padding
+					const maxTaskPreviewLen = Math.max(15, columnWidth - 25); // Account for agent name, duration, etc.
+
+					const taskLines = renderTaskLines(ctx, maxTitleLen);
+					const subagentLines = renderSubagentLines(ctx, spinner, fgRunning, bgRunning, maxTaskPreviewLen, true);
+
+					return mergeSideBySide(taskLines, subagentLines, columnWidth, separator);
+				}
+
+				// Stacked layout (narrow terminal or only one section)
+				const maxTitleLen = 50;
+				const maxTaskPreviewLen = 35;
+				const lines: string[] = [];
+
+				if (hasTasks) {
+					lines.push(...renderTaskLines(ctx, maxTitleLen));
+				}
+
+				if (hasSubagents) {
+					if (hasTasks) lines.push(""); // Spacer between sections
+					lines.push(...renderSubagentLines(ctx, spinner, fgRunning, bgRunning, maxTaskPreviewLen, !hasTasks));
+				}
+
+				return lines;
+			},
+			invalidate(): void {
+				// No caching needed - state is external
+			},
+		}));
 	}
 
 	// Persist state
