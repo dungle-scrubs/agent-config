@@ -140,11 +140,11 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 					}
 					statsParts.push(contextStr);
 
-					// Extension statuses (like tp:ok)
+					// Extension statuses (like tp:ok) - exclude git status since it's in top right
 					const extensionStatuses = footerData.getExtensionStatuses();
 					const statusParts: string[] = [];
-					for (const [, status] of extensionStatuses) {
-						if (status) statusParts.push(sanitize(status));
+					for (const [key, status] of extensionStatuses) {
+						if (status && key !== "git") statusParts.push(sanitize(status));
 					}
 					const statusStr = statusParts.join(" ");
 
