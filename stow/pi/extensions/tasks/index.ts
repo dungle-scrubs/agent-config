@@ -366,7 +366,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 				if (useSideBySide) {
 					// Side-by-side: tasks on left, subagents + bg tasks on right (bottom-aligned)
-					const separator = ctx.ui.theme.fg("dim", "  │  ");
+					const separator = "\x1b[38;2;60;60;70m  │  \x1b[0m"; // Dark gray
 					const separatorWidth = 5; // "  │  " is 5 visible chars
 					const columnWidth = Math.floor((width - separatorWidth) / 2);
 
