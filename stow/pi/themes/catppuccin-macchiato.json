@@ -48,9 +48,9 @@
 		"customMessageBg": "crust",
 		"customMessageText": "text",
 		"customMessageLabel": "mauve",
-		"toolPendingBg": "#181818",
-		"toolSuccessBg": "#181818",
-		"toolErrorBg": "#181818",
+		"toolPendingBg": "#111111",
+		"toolSuccessBg": "#111111",
+		"toolErrorBg": "#111111",
 		"toolTitle": "text",
 		"toolOutput": "subtext0",
 

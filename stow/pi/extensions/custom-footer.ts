@@ -2,18 +2,29 @@
  * Custom Responsive Footer Extension
  *
  * Wide layout (2 lines):
- *   ~/dev/project                                                      main
+ *   ~/dev/project                                                  main*
  *   ↑1.2k ↓39k R12M W708k $11.444 (sub) 68.4%/200k (auto) tp:ok   model • high
  *
  * Narrow layout (4 lines):
  *   ~/dev/project
- *   main
+ *    main*
  *   ↑1.2k ↓39k R12M W708k $11.444 (sub) 68.4%/200k (auto) tp:ok
  *   model • high
  */
 
+import { execSync } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+
+/** Check if git repo has uncommitted changes */
+function isGitDirty(): boolean {
+	try {
+		const status = execSync("git status --porcelain", { encoding: "utf-8", timeout: 1000 });
+		return status.trim().length > 0;
+	} catch {
+		return false;
+	}
+}
 
 // Minimum width for side-by-side layout
 const MIN_WIDE_WIDTH = 100;
@@ -103,8 +114,10 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 						pwd = `~${pwd.slice(home.length)}`;
 					}
 
-					// Git branch
-					const gitBranch = footerData.getGitBranch() || "";
+					// Git branch with dirty indicator
+					const branchName = footerData.getGitBranch() || "";
+					const dirty = branchName ? isGitDirty() : false;
+					const gitBranch = branchName ? ` ${branchName}${dirty ? "*" : ""}` : "";
 
 					// Build stats
 					const statsParts: string[] = [];
