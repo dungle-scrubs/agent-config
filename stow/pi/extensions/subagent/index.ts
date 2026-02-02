@@ -340,10 +340,12 @@ function spawnBackgroundSubagent(
 	agents: AgentConfig[],
 	agentName: string,
 	task: string,
-	cwd: string | undefined
+	cwd: string | undefined,
+	piEvents?: ExtensionAPI["events"]
 ): string | null {
 	const agent = agents.find((a) => a.name === agentName);
 	if (!agent) return null;
+	const effectiveCwd = cwd ?? defaultCwd;
 
 	const args: string[] = ["--mode", "json", "-p", "--no-session"];
 	if (agent.model) args.push("--model", agent.model);
@@ -365,13 +367,22 @@ function spawnBackgroundSubagent(
 	args.push(`Task: ${task}`);
 
 	const proc = spawn("pi", args, {
-		cwd: cwd ?? defaultCwd,
+		cwd: effectiveCwd,
 		shell: false,
 		stdio: ["ignore", "pipe", "pipe"],
 		env: { ...process.env, PI_IS_SUBAGENT: "1" },
 	});
 
 	const id = `bg_${generateId()}`;
+
+	// Emit subagent_start event
+	piEvents?.emit("subagent_start", {
+		agent_id: id,
+		agent_type: agentName,
+		task,
+		cwd: effectiveCwd,
+		background: true,
+	} satisfies SubagentStartEvent);
 	const result: SingleResult = {
 		agent: agentName,
 		agentSource: agent.source,
@@ -407,6 +418,18 @@ function spawnBackgroundSubagent(
 			if (!line.trim()) continue;
 			try {
 				const event = JSON.parse(line);
+
+				// Emit subagent_tool_call when tool starts
+				if (event.type === "tool_call_start") {
+					piEvents?.emit("subagent_tool_call", {
+						agent_id: id,
+						agent_type: agentName,
+						tool_name: event.toolName,
+						tool_call_id: event.toolCallId,
+						tool_input: event.input ?? {},
+					} satisfies SubagentToolCallEvent);
+				}
+
 				if (event.type === "message_end" && event.message) {
 					result.messages.push(event.message);
 					if (event.message.role === "assistant") {
@@ -423,6 +446,15 @@ function spawnBackgroundSubagent(
 				}
 				if (event.type === "tool_result_end" && event.message) {
 					result.messages.push(event.message);
+					// Emit subagent_tool_result when tool completes
+					const resultMsg = event.message;
+					piEvents?.emit("subagent_tool_result", {
+						agent_id: id,
+						agent_type: agentName,
+						tool_name: resultMsg.toolName ?? "unknown",
+						tool_call_id: resultMsg.toolCallId ?? "",
+						is_error: resultMsg.isError ?? false,
+					} satisfies SubagentToolResultEvent);
 				}
 			} catch {
 				/* ignore parse errors */
@@ -447,6 +479,16 @@ function spawnBackgroundSubagent(
 		}
 		result.exitCode = code ?? 0;
 		bgSubagent.status = code === 0 ? "completed" : "failed";
+
+		// Emit subagent_stop event
+		piEvents?.emit("subagent_stop", {
+			agent_id: id,
+			agent_type: agentName,
+			task,
+			exit_code: code ?? 0,
+			result: getFinalOutput(result.messages),
+			background: true,
+		} satisfies SubagentStopEvent);
 
 		// Cleanup temp files
 		if (tmpPromptPath)
@@ -485,9 +527,12 @@ async function runSingleAgent(
 	step: number | undefined,
 	signal: AbortSignal | undefined,
 	onUpdate: OnUpdateCallback | undefined,
-	makeDetails: (results: SingleResult[]) => SubagentDetails
+	makeDetails: (results: SingleResult[]) => SubagentDetails,
+	piEvents?: ExtensionAPI["events"]
 ): Promise<SingleResult> {
 	const agent = agents.find((a) => a.name === agentName);
+	const taskId = `fg_${generateId()}`;
+	const effectiveCwd = cwd ?? defaultCwd;
 
 	if (!agent) {
 		return {
@@ -501,6 +546,15 @@ async function runSingleAgent(
 			step,
 		};
 	}
+
+	// Emit subagent_start event
+	piEvents?.emit("subagent_start", {
+		agent_id: taskId,
+		agent_type: agentName,
+		task,
+		cwd: effectiveCwd,
+		background: false,
+	} satisfies SubagentStartEvent);
 
 	const args: string[] = ["--mode", "json", "-p", "--no-session"];
 	if (agent.model) args.push("--model", agent.model);
@@ -562,6 +616,17 @@ async function runSingleAgent(
 					return;
 				}
 
+				// Emit subagent_tool_call when tool starts
+				if (event.type === "tool_call_start") {
+					piEvents?.emit("subagent_tool_call", {
+						agent_id: taskId,
+						agent_type: agentName,
+						tool_name: event.toolName,
+						tool_call_id: event.toolCallId,
+						tool_input: event.input ?? {},
+					} satisfies SubagentToolCallEvent);
+				}
+
 				if (event.type === "message_end" && event.message) {
 					const msg = event.message as Message;
 					currentResult.messages.push(msg);
@@ -586,6 +651,15 @@ async function runSingleAgent(
 
 				if (event.type === "tool_result_end" && event.message) {
 					currentResult.messages.push(event.message as Message);
+					// Emit subagent_tool_result when tool completes
+					const resultMsg = event.message;
+					piEvents?.emit("subagent_tool_result", {
+						agent_id: taskId,
+						agent_type: agentName,
+						tool_name: resultMsg.toolName ?? "unknown",
+						tool_call_id: resultMsg.toolCallId ?? "",
+						is_error: resultMsg.isError ?? false,
+					} satisfies SubagentToolResultEvent);
 					emitUpdate();
 				}
 			};
@@ -625,6 +699,17 @@ async function runSingleAgent(
 
 		currentResult.exitCode = exitCode;
 		if (wasAborted) throw new Error("Subagent was aborted");
+
+		// Emit subagent_stop event
+		piEvents?.emit("subagent_stop", {
+			agent_id: taskId,
+			agent_type: agentName,
+			task,
+			exit_code: exitCode,
+			result: getFinalOutput(currentResult.messages),
+			background: false,
+		} satisfies SubagentStopEvent);
+
 		return currentResult;
 	} finally {
 		if (tmpPromptPath)
@@ -676,6 +761,50 @@ const SubagentParams = Type.Object({
 		})
 	),
 });
+
+/**
+ * Subagent lifecycle events (aligned with Claude Code hook naming, snake_case)
+ *
+ * Listen in other extensions:
+ *   pi.events.on("subagent_start", (data) => { ... });
+ *   pi.events.on("subagent_stop", (data) => { ... });
+ *   pi.events.on("subagent_tool_call", (data) => { ... });  // Pi extension
+ *   pi.events.on("subagent_tool_result", (data) => { ... }); // Pi extension
+ */
+export interface SubagentStartEvent {
+	agent_id: string;
+	agent_type: string;
+	task: string;
+	cwd: string;
+	background: boolean;
+}
+
+export interface SubagentStopEvent {
+	agent_id: string;
+	agent_type: string;
+	task: string;
+	exit_code: number;
+	result: string;
+	background: boolean;
+}
+
+/** Pi extension - not in Claude Code hooks */
+export interface SubagentToolCallEvent {
+	agent_id: string;
+	agent_type: string;
+	tool_name: string;
+	tool_call_id: string;
+	tool_input: Record<string, unknown>;
+}
+
+/** Pi extension - not in Claude Code hooks */
+export interface SubagentToolResultEvent {
+	agent_id: string;
+	agent_type: string;
+	tool_name: string;
+	tool_call_id: string;
+	is_error: boolean;
+}
 
 export default function (pi: ExtensionAPI) {
 	// Skip in subagent workers - they don't need to spawn subagents
@@ -815,7 +944,8 @@ WHEN NOT TO USE SUBAGENTS:
 						i + 1,
 						signal,
 						chainUpdate,
-						makeDetails("chain")
+						makeDetails("chain"),
+						pi.events
 					);
 					results.push(result);
 
@@ -852,7 +982,7 @@ WHEN NOT TO USE SUBAGENTS:
 				if (params.background) {
 					const taskIds: string[] = [];
 					for (const t of params.tasks) {
-						const id = spawnBackgroundSubagent(ctx.cwd, agents, t.agent, t.task, t.cwd);
+						const id = spawnBackgroundSubagent(ctx.cwd, agents, t.agent, t.task, t.cwd, pi.events);
 						if (id) taskIds.push(id);
 					}
 					return {
@@ -927,7 +1057,8 @@ WHEN NOT TO USE SUBAGENTS:
 									emitParallelUpdate();
 								}
 							},
-							makeDetails("parallel")
+							makeDetails("parallel"),
+							pi.events
 						);
 						allResults[index] = result;
 						return result;
@@ -960,7 +1091,7 @@ WHEN NOT TO USE SUBAGENTS:
 			if (params.agent && params.task) {
 				// Background mode for single agent: spawn without awaiting
 				if (params.background) {
-					const id = spawnBackgroundSubagent(ctx.cwd, agents, params.agent, params.task, params.cwd);
+					const id = spawnBackgroundSubagent(ctx.cwd, agents, params.agent, params.task, params.cwd, pi.events);
 					if (id) {
 						return {
 							content: [
@@ -1012,7 +1143,8 @@ WHEN NOT TO USE SUBAGENTS:
 						lastUpdate = update;
 						emitSingleUpdate();
 					},
-					makeDetails("single")
+					makeDetails("single"),
+					pi.events
 				);
 
 				if (singleSpinnerInterval) {
