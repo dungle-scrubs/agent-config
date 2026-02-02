@@ -138,7 +138,12 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	let lastWidgetContent = "";
 
 	function updateWidget(ctx: ExtensionContext): void {
-		if (!state.visible || state.tasks.length === 0) {
+		// Check for background subagents even if no tasks
+		const bgSubagentsMap = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
+		const bgRunning = bgSubagentsMap ? [...bgSubagentsMap.values()].filter((s: any) => s.status === "running") : [];
+		const hasBgSubagents = bgRunning.length > 0;
+
+		if (!state.visible || (state.tasks.length === 0 && !hasBgSubagents)) {
 			if (lastWidgetContent !== "") {
 				ctx.ui.setWidget("1-tasks", undefined);
 				lastWidgetContent = "";
@@ -151,70 +156,68 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		const visibleTasks = state.tasks.slice(0, maxVisible);
 
 		const lines: string[] = [];
-		const _pending = state.tasks.filter((t) => t.status === "pending").length;
-		const _inProgress = state.tasks.filter((t) => t.status === "in_progress").length;
-		const completed = state.tasks.filter((t) => t.status === "completed").length;
 
-		lines.push(ctx.ui.theme.fg("accent", `Tasks (${completed}/${state.tasks.length})`));
+		// Only show task header and list if there are tasks
+		if (state.tasks.length > 0) {
+			const _pending = state.tasks.filter((t) => t.status === "pending").length;
+			const _inProgress = state.tasks.filter((t) => t.status === "in_progress").length;
+			const completed = state.tasks.filter((t) => t.status === "completed").length;
 
-		for (const task of visibleTasks) {
-			let icon: string;
-			let textStyle: (s: string) => string;
+			lines.push(ctx.ui.theme.fg("accent", `Tasks (${completed}/${state.tasks.length})`));
 
-			switch (task.status) {
-				case "completed":
-					icon = ctx.ui.theme.fg("success", "[✓]");
-					textStyle = (s) => ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(s));
-					break;
-				case "in_progress":
-					icon = ctx.ui.theme.fg("warning", "[●]"); // Filled circle for active
-					textStyle = (s) => ctx.ui.theme.fg("accent", s);
-					break;
-				default:
-					icon = "[ ]"; // White/default color
-					textStyle = (s) => s;
+			for (const task of visibleTasks) {
+				let icon: string;
+				let textStyle: (s: string) => string;
+
+				switch (task.status) {
+					case "completed":
+						icon = ctx.ui.theme.fg("success", "[✓]");
+						textStyle = (s) => ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(s));
+						break;
+					case "in_progress":
+						icon = ctx.ui.theme.fg("warning", "[●]"); // Filled circle for active
+						textStyle = (s) => ctx.ui.theme.fg("accent", s);
+						break;
+					default:
+						icon = "[ ]"; // White/default color
+						textStyle = (s) => s;
+				}
+
+				// Truncate long task titles
+				const maxLen = 50;
+				const title = task.title.length > maxLen ? `${task.title.substring(0, maxLen - 3)}...` : task.title;
+
+				lines.push(`${icon} ${textStyle(title)}`);
 			}
 
-			// Truncate long task titles
-			const maxLen = 50;
-			const title = task.title.length > maxLen ? `${task.title.substring(0, maxLen - 3)}...` : task.title;
-
-			lines.push(`${icon} ${textStyle(title)}`);
-		}
-
-		if (state.tasks.length > maxVisible) {
-			lines.push(ctx.ui.theme.fg("muted", `  ... and ${state.tasks.length - maxVisible} more`));
+			if (state.tasks.length > maxVisible) {
+				lines.push(ctx.ui.theme.fg("muted", `  ... and ${state.tasks.length - maxVisible} more`));
+			}
 		}
 
 		// Append background subagents from subagent extension (via shared global)
-		const bgSubagents = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
-		if (bgSubagents && bgSubagents.size > 0) {
-			const bgRunning = [...bgSubagents.values()].filter((s: any) => s.status === "running");
-			if (bgRunning.length > 0) {
-				lines.push(""); // Spacer
-				lines.push(
-					`${ctx.ui.theme.fg("accent", `Background Subagents`)} ${ctx.ui.theme.fg("success", `● ${bgRunning.length} running`)}`
-				);
+		if (hasBgSubagents) {
+			if (lines.length > 0) lines.push(""); // Spacer only if tasks exist
+			lines.push(
+				`${ctx.ui.theme.fg("accent", `Background Subagents`)} ${ctx.ui.theme.fg("success", `● ${bgRunning.length} running`)}`
+			);
 
-				for (let i = 0; i < bgRunning.length; i++) {
-					const sub = bgRunning[i];
-					const isLast = i === bgRunning.length - 1;
-					const treeChar = isLast ? "└─" : "├─";
-					const ms = Date.now() - sub.startTime;
-					const secs = Math.floor(ms / 1000);
-					const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
-					const taskPreview = sub.task.length > 35 ? `${sub.task.slice(0, 32)}...` : sub.task;
-					lines.push(
-						`${ctx.ui.theme.fg("accent", treeChar)} ${ctx.ui.theme.fg("success", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
-					);
-				}
+			for (let i = 0; i < bgRunning.length; i++) {
+				const sub = bgRunning[i];
+				const isLast = i === bgRunning.length - 1;
+				const treeChar = isLast ? "└─" : "├─";
+				const ms = Date.now() - sub.startTime;
+				const secs = Math.floor(ms / 1000);
+				const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
+				const taskPreview = sub.task.length > 35 ? `${sub.task.slice(0, 32)}...` : sub.task;
+				lines.push(
+					`${ctx.ui.theme.fg("accent", treeChar)} ${ctx.ui.theme.fg("success", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
+				);
 			}
 		}
 
 		// Build stable key (exclude changing durations)
 		const taskStates = state.tasks.map((t) => `${t.id}:${t.status}`).join(",");
-		const bgSubagentsMap = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
-		const bgRunning = bgSubagentsMap ? [...bgSubagentsMap.values()].filter((s: any) => s.status === "running") : [];
 		const bgIds = bgRunning.map((s: any) => s.id).join(",");
 		const stableKey = `${taskStates}|${bgIds}`;
 
