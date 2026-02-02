@@ -16,14 +16,54 @@ import { execSync } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
-/** Check if git repo has uncommitted changes */
-function isGitDirty(): boolean {
+interface GitState {
+	branch: string | null;
+	dirty: boolean;
+	ahead: number;
+	behind: number;
+}
+
+/** Run a git command and return output or null on error */
+function runGit(cmd: string): string | null {
 	try {
-		const status = execSync("git status --porcelain", { encoding: "utf-8", timeout: 1000 });
-		return status.trim().length > 0;
+		return execSync(`git ${cmd}`, {
+			encoding: "utf-8",
+			timeout: 2000,
+			stdio: ["pipe", "pipe", "pipe"],
+		}).trim();
 	} catch {
-		return false;
+		return null;
 	}
+}
+
+/** Get git state including branch, dirty, ahead/behind */
+function getGitState(): GitState | null {
+	const gitDir = runGit("rev-parse --git-dir");
+	if (!gitDir) return null;
+
+	let branch = runGit("branch --show-current");
+	if (!branch) {
+		branch = runGit("rev-parse --short HEAD");
+		if (branch) branch = `(${branch})`;
+	}
+	if (!branch) return null;
+
+	const status = runGit("status --porcelain");
+	const dirty = status !== null && status.length > 0;
+
+	let ahead = 0;
+	let behind = 0;
+	const upstream = runGit("rev-parse --abbrev-ref @{upstream}");
+	if (upstream) {
+		const aheadBehind = runGit("rev-list --left-right --count HEAD...@{upstream}");
+		if (aheadBehind) {
+			const [a, b] = aheadBehind.split(/\s+/).map(Number);
+			ahead = a || 0;
+			behind = b || 0;
+		}
+	}
+
+	return { branch, dirty, ahead, behind };
 }
 
 // Minimum width for side-by-side layout
@@ -114,10 +154,20 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 						pwd = `~${pwd.slice(home.length)}`;
 					}
 
-					// Git branch with dirty indicator
-					const branchName = footerData.getGitBranch() || "";
-					const dirty = branchName ? isGitDirty() : false;
-					const gitBranch = branchName ? ` ${branchName}${dirty ? "*" : ""}` : "";
+					// Git branch with status symbols
+					const gitState = getGitState();
+					let gitBranch = "";
+					if (gitState?.branch) {
+						const parts: string[] = [];
+						// Branch icon and name
+						parts.push(` ${gitState.branch}`);
+						// Dirty indicator
+						if (gitState.dirty) parts.push(theme.fg("warning", "*"));
+						// Ahead/behind
+						if (gitState.ahead > 0) parts.push(theme.fg("success", `↑${gitState.ahead}`));
+						if (gitState.behind > 0) parts.push(theme.fg("error", `↓${gitState.behind}`));
+						gitBranch = parts.join("");
+					}
 
 					// Build stats
 					const statsParts: string[] = [];
