@@ -46,7 +46,7 @@ describe("hooks extension", () => {
 			vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(hooksConfig));
 
 			// Import and initialize extension
-			const { default: hooksExtension } = await import("./index.js");
+			const { default: hooksExtension } = await import("../../../stow/pi/extensions/hooks/index.js");
 			hooksExtension(mockApi as any);
 
 			// Trigger session_start to load config

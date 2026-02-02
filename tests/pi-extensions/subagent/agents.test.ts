@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { discoverAgents } from "./agents.js";
+import { discoverAgents } from "../../../stow/pi/extensions/subagent/agents.js";
 
 // Mock fs and os modules
 vi.mock("node:fs");

@@ -13,7 +13,7 @@ import {
 	completeTasksBatch,
 	createInitialState,
 	type TasksState,
-} from "./tasks-core.js";
+} from "../../../stow/pi/extensions/tasks/tasks-core.js";
 
 // Mock theme
 const mockTheme = {
