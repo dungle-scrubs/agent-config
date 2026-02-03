@@ -13,8 +13,8 @@ description: COMMAND_DESCRIPTION  # NO QUOTES AT ALL
 
 ### Path References
 - Use @ prefix for file paths in commands
-- Use ~/.claude/ for global files
-- Project files use ./.claude/ prefix
+- Reference sibling files by name (e.g., `command/_template.md`)
+- Project files use relative paths from project root
 
 ### Date Format
 - Always use YYYY-MM-DD format
@@ -27,12 +27,7 @@ description: COMMAND_DESCRIPTION  # NO QUOTES AT ALL
 ## Usage Pattern
 
 ```text
-@~/.claude/commands/[COMMAND_NAME].md
-```
-
-Alternative for project-specific:
-```text
-@./.claude/commands/[COMMAND_NAME].md
+/[COMMAND_NAME] [arguments]
 ```
 
 ## Prerequisites

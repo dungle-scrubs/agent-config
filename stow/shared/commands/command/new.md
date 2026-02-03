@@ -5,6 +5,12 @@ argument-hint: [prompt]
 
 # Create Command
 
+> **META-COMMAND**: This is a command-creation wizard. Invoke it with a description of the command you want to create, and it will guide you through building it.
+>
+> Example: `/command:new a command that runs database migrations with rollback support`
+>
+> The agent will then classify complexity, gather requirements, and generate the command file.
+
 ## Purpose
 
 Creates a new Claude Code command file with intelligent prompt classification and structure. Uses interactive discovery to determine the appropriate prompt level (L1-L7) and applies corresponding structural patterns. Ensures commands are created with optimal complexity, proper formatting, and REQUIRED frontmatter.
@@ -21,7 +27,7 @@ You MUST understand:
 4. **Description field has NO QUOTES**, not double, not single
 
 If any of these are unclear, read the template first:
-`~/.claude/commands/command/_template.md`
+`command/_template.md` (sibling file in this prompts directory)
 
 ## Variables
 
@@ -35,9 +41,9 @@ If any of these are unclear, read the template first:
 
 ## Prerequisites
 
-- Prompt classification system from `~/.claude/commands/command/_prompt-levels.md`
-- Structural patterns from `~/.claude/commands/command/_prompt-standards.md`
-- Template exists at `~/.claude/commands/command/_template.md`
+- Prompt classification system from `command/_prompt-levels.md` (sibling file in this prompts directory)
+- Structural patterns from `command/_prompt-standards.md` (sibling file in this prompts directory)
+- Template exists at `command/_template.md` (sibling file in this prompts directory)
 
 ## Process Flow
 
@@ -121,9 +127,7 @@ Based on classification level from Step 1:
 
 **CRITICAL**: Load the mandatory command template BEFORE gathering information
 
-```text
-Read template from: ~/.claude/commands/command/_template.md
-```
+Read the `command/_template.md` file (sibling file in this prompts directory).
 
 This template provides:
 
@@ -143,7 +147,7 @@ Based on classification, prompt for:
 
 ### Step 6: Apply Structural Patterns
 
-Based on prompt level classification from Step 1, apply appropriate sections from `~/.claude/commands/command/_prompt-standards.md`:
+Based on prompt level classification from Step 1, apply appropriate sections from `command/_prompt-standards.md` (sibling file):
 
 **L1 (Basic Prompt)**:
 
@@ -231,8 +235,8 @@ Launch TWO exploration agents in parallel using Task tool (subagent_type: Explor
 
 **Agent 2 - Reference Explorer**:
 
-- Read `~/.claude/commands/command/_prompt-standards.md`
-- Read `~/.claude/commands/command/_prompt-levels.md`
+- Read `command/_prompt-standards.md` (sibling file in prompts directory)
+- Read `command/_prompt-levels.md` (sibling file in prompts directory)
 - Extract level-specific requirements and best practices
 - Output: Required sections, control flow standards, agent coordination guidance
 

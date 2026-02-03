@@ -5,6 +5,12 @@ argument-hint: [prompt]
 
 # Create Skill Command
 
+> **META-COMMAND**: This is a skill-creation wizard. Invoke it with a description of the skill you want to create, and it will guide you through building it.
+>
+> Example: `/skill:new a skill for processing and validating CSV files`
+>
+> The agent will then gather requirements (name, triggers, tools) and generate the skill directory with SKILL.md.
+
 ## Purpose
 
 Creates a new Claude Code skill directory with SKILL.md using the standardized template with built-in validation guidance. This command ensures skills are created with proper formatting, correct directory structure, and in the correct location.
@@ -25,7 +31,7 @@ Creates a new Claude Code skill directory with SKILL.md using the standardized t
 
 ## Prerequisites
 
-- Template exists at `~/.claude/commands/skill/_template.md`
+- Template exists at `skill/_template.md` (sibling file in this prompts directory)
 
 ## Process Flow
 
@@ -76,11 +82,7 @@ When deterministic scripts are needed:
 
 ### Step 4: Load Template
 
-Reference the enhanced template from:
-
-```text
-~/.claude/commands/skill/_template.md
-```
+Read the `skill/_template.md` file (sibling file in this prompts directory).
 
 ### Step 5: Create Directory Structure
 

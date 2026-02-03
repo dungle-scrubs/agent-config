@@ -2,7 +2,7 @@
 
 This document defines comprehensive standards and strategies for creating effective agentic prompts.
 
-> For a detailed breakdown of prompt complexity levels, see @~/.claude/commands/command/_prompt-levels.md
+> For a detailed breakdown of prompt complexity levels, see `command/_prompt-levels.md` (sibling file)
 
 ## Core Principle: Use Only What's Needed
 
@@ -263,7 +263,7 @@ A categorization of prompts by their complexity and capabilities:
 6. **Template Metaprompt** – Generates new prompts dynamically
 7. **Self Improving** – Evolves based on usage and feedback
 
-> See @~/.claude/commands/command/_prompt-levels.md for detailed descriptions of each level
+> See `command/_prompt-levels.md` (sibling file) for detailed descriptions of each level
 
 ## 3. Prompt Format Types
 
@@ -382,5 +382,5 @@ Communicate priority through formatting - each creates different behavioral resp
 
 ## Related Documents
 
-- **@~/.claude/commands/command/_prompt-levels.md** - Detailed breakdown of the 7 prompt complexity levels
+- **`command/_prompt-levels.md` (sibling file)** - Detailed breakdown of the 7 prompt complexity levels
 - **@prompts/create-image.md** - Example of named loop blocks and MCP server usage

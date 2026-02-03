@@ -5,6 +5,12 @@ argument-hint: [prompt]
 
 # Create Agent Command
 
+> **META-COMMAND**: This is an agent-creation wizard. Invoke it with a description of the agent you want to create, and it will guide you through building it.
+>
+> Example: `/agent:new an agent that reviews code for security vulnerabilities`
+>
+> The agent will then gather requirements (name, model, tools) and generate the agent file.
+
 ## Purpose
 
 Creates a new Claude Code agent file using the standardized template with built-in validation guidance. This command ensures agents are created with proper formatting and in the correct location.
@@ -23,7 +29,7 @@ Creates a new Claude Code agent file using the standardized template with built-
 
 ## Prerequisites
 
-- Template exists at `~/.claude/commands/agent/_template.md`
+- Template exists at `agent/_template.md` (sibling file in this prompts directory)
 
 ## Process Flow
 
@@ -68,11 +74,7 @@ When deterministic scripts are needed:
 
 ### Step 4: Load Template
 
-Reference the enhanced template from:
-
-```text
-~/.claude/commands/agent/_template.md
-```
+Read the `agent/_template.md` file (sibling file in this prompts directory).
 
 ### Step 5: Create Agent and Scripts
 
@@ -187,7 +189,7 @@ Agent handles: Deciding what to fetch, interpreting results, error recovery deci
 ## Best Practices
 
 - **CRITICAL**: Description field must have NO QUOTES (not double quotes, not single quotes)
-- Always reference the template validation requirements in `~/.claude/commands/agent/_template.md`
+- Always reference the template validation requirements in `agent/_template.md`
 - Ensure model names are exactly haiku, sonnet, or opus
 - Use comma-separated tools without brackets
 - Follow kebab-case naming convention
