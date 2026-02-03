@@ -170,7 +170,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 					textStyle = (s) => ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(s));
 					break;
 				case "in_progress":
-					icon = ctx.ui.theme.fg("warning", "▣");
+					icon = ctx.ui.theme.fg("warning", SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length]);
 					textStyle = (s) => ctx.ui.theme.fg("accent", s);
 					break;
 				default:
@@ -934,8 +934,9 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 			const fgRunning = fgSubagents ? fgSubagents.size : 0;
 			const bgRunning = bgSubagents ? [...bgSubagents.values()].filter((s: any) => s.status === "running").length : 0;
 			const bgTaskRunning = bgTasks ? [...bgTasks.values()].filter((t: any) => t.status === "running").length : 0;
+			const hasActiveTask = state.tasks.some((t) => t.status === "in_progress");
 
-			const hasRunning = fgRunning > 0 || bgRunning > 0 || bgTaskRunning > 0;
+			const hasRunning = fgRunning > 0 || bgRunning > 0 || bgTaskRunning > 0 || hasActiveTask;
 
 			// Update on every tick when background items running (for animation), or when count changes
 			if (hasRunning || bgRunning !== lastBgCount || bgTaskRunning !== lastBgTaskCount) {
