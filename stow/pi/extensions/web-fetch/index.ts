@@ -1,5 +1,5 @@
 /**
- * Smart Fetch Extension for Pi
+ * WebFetch Extension for Pi
  *
  * Fetches web content with automatic fallback to Firecrawl when content is truncated.
  *
@@ -24,7 +24,7 @@ async function tryFirecrawl(url: string, _ctx: any): Promise<string | null> {
 
 		const baseUrl = process.env.TOOL_PROXY_URL || "http://localhost:3100";
 		const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
-		const client = new Client({ name: "pi-fetch", version: "1.0.0" });
+		const client = new Client({ name: "pi-web-fetch", version: "1.0.0" });
 
 		await client.connect(transport);
 
@@ -61,8 +61,8 @@ async function tryFirecrawl(url: string, _ctx: any): Promise<string | null> {
 
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
-		name: "fetch",
-		label: "Fetch URL",
+		name: "web-fetch",
+		label: "WebFetch",
 		description: `Fetch content from a URL. If content exceeds the limit and Firecrawl is available via tool-proxy, automatically uses Firecrawl for better extraction.
 
 WHEN TO USE:
@@ -177,7 +177,7 @@ AUTOMATIC FIRECRAWL FALLBACK:
 
 		renderCall(args, theme) {
 			const url = args.url.length > 60 ? `${args.url.slice(0, 60)}...` : args.url;
-			return new Text(theme.fg("toolTitle", theme.bold("fetch ")) + theme.fg("accent", url), 0, 0);
+			return new Text(theme.fg("toolTitle", theme.bold("web-fetch ")) + theme.fg("accent", url), 0, 0);
 		},
 
 		renderResult(result, { expanded }, theme) {

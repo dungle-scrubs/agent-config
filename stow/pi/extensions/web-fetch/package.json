@@ -1,5 +1,5 @@
 {
-	"name": "pi-fetch",
+	"name": "pi-web-fetch",
 	"version": "1.0.0",
 	"type": "module",
 	"dependencies": {
