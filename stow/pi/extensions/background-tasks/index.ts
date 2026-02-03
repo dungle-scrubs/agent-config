@@ -97,6 +97,9 @@ function truncateCommand(cmd: string, maxLen = 40): string {
 export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 	// Update status widget (widget rendering delegated to tasks extension via __piBackgroundTasks)
 	function updateWidget(ctx: ExtensionContext): void {
+		// Guard: ctx.ui may be undefined if context is stale (e.g., from async callback after shutdown)
+		if (!ctx?.ui) return;
+
 		const running = [...tasks.values()].filter((t) => t.status === "running");
 
 		if (running.length === 0) {
