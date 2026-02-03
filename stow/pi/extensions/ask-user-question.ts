@@ -68,7 +68,7 @@ WHEN NOT TO USE:
 		 * @param _signal - Abort signal for cancellation
 		 * @returns Tool result with the user's selection
 		 */
-		async execute(_toolCallId, params, _onUpdate, ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			if (!ctx.hasUI) {
 				return {
 					content: [{ type: "text", text: "Error: UI not available (running in non-interactive mode)" }],

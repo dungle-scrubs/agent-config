@@ -15,7 +15,12 @@ import { Type } from "@sinclair/typebox";
 
 const DEFAULT_MAX_BYTES = 50_000;
 
-// Try to use tool-proxy's Firecrawl if available
+/**
+ * Attempts to fetch URL content via tool-proxy's Firecrawl integration.
+ * @param url - URL to fetch
+ * @param _ctx - Extension context (unused)
+ * @returns Markdown content or null if Firecrawl unavailable
+ */
 async function tryFirecrawl(url: string, _ctx: any): Promise<string | null> {
 	try {
 		// Import dynamically to avoid hard dependency
@@ -59,6 +64,10 @@ async function tryFirecrawl(url: string, _ctx: any): Promise<string | null> {
 	}
 }
 
+/**
+ * Registers web-fetch tool with automatic Firecrawl fallback for large pages.
+ * @param pi - Extension API for registering tools
+ */
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "web-fetch",
@@ -89,7 +98,7 @@ AUTOMATIC FIRECRAWL FALLBACK:
 			),
 		}),
 
-		async execute(_toolCallId, params, onUpdate, ctx, signal) {
+		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			const maxBytes = params.maxBytes ?? DEFAULT_MAX_BYTES;
 			const useFirecrawlOnTruncate = params.useFirecrawlOnTruncate ?? true;
 			const _format = params.format ?? "text";

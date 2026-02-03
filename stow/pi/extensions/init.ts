@@ -22,6 +22,10 @@ Usage notes:
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.`;
 
+/**
+ * Registers /init command to create or improve CLAUDE.md for a project.
+ * @param pi - Extension API for registering commands
+ */
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("init", {
     description: "Initialize CLAUDE.md for the current project",

@@ -23,7 +23,11 @@ interface GitState {
 	behind: number;
 }
 
-/** Run a git command and return output or null on error */
+/**
+ * Runs a git command and returns output or null on error.
+ * @param cmd - Git command to run (without 'git' prefix)
+ * @returns Trimmed stdout output, or null if command failed
+ */
 function runGit(cmd: string): string | null {
 	try {
 		return execSync(`git ${cmd}`, {
@@ -36,7 +40,21 @@ function runGit(cmd: string): string | null {
 	}
 }
 
-/** Get git state including branch, dirty, ahead/behind */
+/**
+ * Checks if current directory is a git worktree.
+ * @returns True if in a git worktree, false otherwise
+ */
+function isGitWorktree(): boolean {
+	const gitDir = runGit("rev-parse --git-dir");
+	if (!gitDir) return false;
+	// In a worktree, git-dir contains "worktrees" path segment
+	return gitDir.includes("/worktrees/");
+}
+
+/**
+ * Gets git state including branch, dirty status, and ahead/behind counts.
+ * @returns Git state object or null if not in a git repo
+ */
 function getGitState(): GitState | null {
 	const gitDir = runGit("rev-parse --git-dir");
 	if (!gitDir) return null;
@@ -69,7 +87,11 @@ function getGitState(): GitState | null {
 // Minimum width for side-by-side layout
 const MIN_WIDE_WIDTH = 100;
 
-/** Format token counts */
+/**
+ * Formats token counts with k/M suffixes for readability.
+ * @param count - Token count to format
+ * @returns Formatted string (e.g., "1.2k", "5M")
+ */
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
 	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
@@ -78,12 +100,22 @@ function formatTokens(count: number): string {
 	return `${Math.round(count / 1000000)}M`;
 }
 
-/** Sanitize text for single-line display */
+/**
+ * Sanitizes text for single-line display by collapsing whitespace.
+ * @param text - Text to sanitize
+ * @returns Cleaned single-line string
+ */
 function sanitize(text: string): string {
 	return text.replace(/[\r\n\t]/g, " ").replace(/ +/g, " ").trim();
 }
 
-/** Pad/align: left content + right content with padding between */
+/**
+ * Aligns left and right content with padding between.
+ * @param left - Left-aligned content
+ * @param right - Right-aligned content
+ * @param width - Total width to fill
+ * @returns Padded string with left and right content
+ */
 function alignLeftRight(left: string, right: string, width: number): string {
 	const leftWidth = visibleWidth(left);
 	const rightWidth = visibleWidth(right);
@@ -91,6 +123,10 @@ function alignLeftRight(left: string, right: string, width: number): string {
 	return left + " ".repeat(padding) + right;
 }
 
+/**
+ * Registers a custom responsive footer showing git, tokens, and model info.
+ * @param pi - Extension API for registering event handlers
+ */
 export default function customFooterExtension(pi: ExtensionAPI): void {
 	let extensionCtx: ExtensionContext | null = null;
 	let autoCompactEnabled = true;
@@ -159,6 +195,10 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 					let gitBranch = "";
 					if (gitState?.branch) {
 						const parts: string[] = [];
+						// Worktree badge (teal bg, dark text) - to the left of branch
+						if (isGitWorktree()) {
+							parts.push(`\x1b[48;2;94;234;212m\x1b[38;2;19;78;74m worktree \x1b[0m`);
+						}
 						// Branch icon and name (teal)
 						parts.push(`\x1b[38;2;139;213;202m ${gitState.branch}\x1b[0m`);
 						// Dirty indicator

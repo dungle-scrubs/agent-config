@@ -30,7 +30,12 @@ const FG_LIGHT_RED = "\x1b[38;2;237;135;150m"; // Catppuccin Macchiato red #ed87
 const FG_WHITE = "\x1b[38;2;202;211;245m"; // Catppuccin Macchiato text #cad3f5
 const RESET_ALL = "\x1b[0m";
 
-/** Apply dark blue background with light text to a line, padding to full width */
+/**
+ * Applies dark blue background with light text to a line, padding to full width.
+ * @param line - Line content to style
+ * @param width - Total width to pad to
+ * @returns Styled line with ANSI escape codes
+ */
 function withDarkBlueBg(line: string, width: number): string {
 	const visLen = visibleWidth(line);
 	const padding = " ".repeat(Math.max(0, width - visLen));
@@ -59,11 +64,18 @@ const tasks = new Map<string, BackgroundTask>();
 (globalThis as any).__piBackgroundTasks = tasks;
 let taskCounter = 0;
 
+/**
+ * Generates a unique task ID combining counter and timestamp.
+ * @returns Unique task identifier string
+ */
 function generateTaskId(): string {
 	taskCounter++;
 	return `bg_${taskCounter}_${Date.now().toString(36)}`;
 }
 
+/**
+ * Removes oldest completed tasks when task count exceeds MAX_TASKS.
+ */
 function cleanupOldTasks(): void {
 	if (tasks.size <= MAX_TASKS) return;
 
@@ -78,6 +90,11 @@ function cleanupOldTasks(): void {
 	}
 }
 
+/**
+ * Formats milliseconds into human-readable duration (e.g., "5s", "2m 30s", "1h 15m").
+ * @param ms - Duration in milliseconds
+ * @returns Formatted duration string
+ */
 function formatDuration(ms: number): string {
 	const seconds = Math.floor(ms / 1000);
 	if (seconds < 60) return `${seconds}s`;
@@ -89,13 +106,26 @@ function formatDuration(ms: number): string {
 	return `${hours}h ${mins}m`;
 }
 
+/**
+ * Truncates a command string with ellipsis if it exceeds max length.
+ * @param cmd - Command string to truncate
+ * @param maxLen - Maximum length (default 40)
+ * @returns Truncated command or original if short enough
+ */
 function truncateCommand(cmd: string, maxLen = 40): string {
 	if (cmd.length <= maxLen) return cmd;
 	return `${cmd.substring(0, maxLen - 3)}...`;
 }
 
+/**
+ * Registers background task tools (bg_bash, task_output, task_status, task_kill) and /bg command.
+ * @param pi - Extension API for registering tools and commands
+ */
 export default function backgroundTasksExtension(pi: ExtensionAPI): void {
-	// Update status widget (widget rendering delegated to tasks extension via __piBackgroundTasks)
+	/**
+	 * Updates the status bar indicator for running background tasks.
+	 * @param ctx - Extension context for UI access
+	 */
 	function updateWidget(ctx: ExtensionContext): void {
 		// Guard: ctx.ui may be undefined if context is stale (e.g., from async callback after shutdown)
 		if (!ctx?.ui) return;
@@ -121,7 +151,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			command: Type.String({ description: "Bash command to run in background" }),
 			timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, default: no timeout)" })),
 		}),
-		async execute(_toolCallId, params, _onUpdate, ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const taskId = generateTaskId();
 			const cwd = ctx.cwd;
 
@@ -219,7 +249,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			taskId: Type.String({ description: "Task ID returned by bg_bash" }),
 			tail: Type.Optional(Type.Number({ description: "Only return last N lines (optional)" })),
 		}),
-		async execute(_toolCallId, params, _onUpdate, _ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const task = tasks.get(params.taskId);
 
 			if (!task) {
@@ -267,7 +297,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		parameters: Type.Object({
 			taskId: Type.String({ description: "Task ID returned by bg_bash" }),
 		}),
-		async execute(_toolCallId, params, _onUpdate, _ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const task = tasks.get(params.taskId);
 
 			if (!task) {
@@ -315,7 +345,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		parameters: Type.Object({
 			taskId: Type.String({ description: "Task ID to kill" }),
 		}),
-		async execute(_toolCallId, params, _onUpdate, ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const task = tasks.get(params.taskId);
 
 			if (!task) {

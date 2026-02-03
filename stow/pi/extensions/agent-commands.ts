@@ -34,7 +34,9 @@ interface Agent {
 }
 
 /**
- * Parse frontmatter and body from agent content
+ * Parses frontmatter and body from agent markdown content.
+ * @param content - Raw markdown content with optional YAML frontmatter
+ * @returns Object containing parsed frontmatter and body text
  */
 function parseAgent(content: string): { frontmatter: AgentFrontmatter; body: string } {
 	const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
@@ -60,7 +62,9 @@ function parseAgent(content: string): { frontmatter: AgentFrontmatter; body: str
 }
 
 /**
- * Load agents from a directory
+ * Loads agent definitions from a directory of markdown files.
+ * @param dir - Directory path to scan for .md files
+ * @returns Array of parsed agent configurations
  */
 function loadAgentsFromDir(dir: string): Agent[] {
 	const agents: Agent[] = [];
@@ -111,7 +115,9 @@ function loadAgentsFromDir(dir: string): Agent[] {
 }
 
 /**
- * Load all agents from user and project directories
+ * Loads agents from user (~/.pi/agent/agents) and project (.pi/agents) directories.
+ * Project agents override user agents with the same name.
+ * @returns Merged array of unique agents
  */
 function loadAgents(): Agent[] {
 	const userDir = path.join(os.homedir(), ".pi", "agent", "agents");
@@ -129,7 +135,10 @@ function loadAgents(): Agent[] {
 }
 
 /**
- * Write system prompt to temp file
+ * Writes agent system prompt to a temporary file for pi subprocess.
+ * @param name - Agent name (used in filename)
+ * @param content - System prompt content to write
+ * @returns Path to the created temp file
  */
 function writeTempPrompt(name: string, content: string): string {
 	const tmpDir = os.tmpdir();
@@ -138,6 +147,10 @@ function writeTempPrompt(name: string, content: string): string {
 	return filePath;
 }
 
+/**
+ * Registers slash commands for each discovered agent.
+ * @param pi - Extension API for registering commands
+ */
 export default function (pi: ExtensionAPI) {
 	const agents = loadAgents();
 

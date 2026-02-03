@@ -71,6 +71,9 @@ const _backgroundRequested = false;
 
 // Background subagents are rendered by tasks extension via shared global
 // This function is now a no-op - tasks extension reads __piBackgroundSubagents
+/**
+ * No-op placeholder - background widget is now rendered by tasks extension.
+ */
 function updateBackgroundWidget(): void {
 	// No-op - tasks extension handles rendering
 }
@@ -78,10 +81,19 @@ function updateBackgroundWidget(): void {
 const _spinnerFrame = 0;
 let uiContext: any = null;
 
+/**
+ * Generates a random 8-character ID for tracking subagent invocations.
+ * @returns Random alphanumeric ID string
+ */
 function generateId(): string {
 	return Math.random().toString(36).substring(2, 10);
 }
 
+/**
+ * Formats milliseconds as human-readable duration (e.g., "5s", "2m30s").
+ * @param ms - Duration in milliseconds
+ * @returns Formatted duration string
+ */
 function formatDuration(ms: number): string {
 	const seconds = Math.floor(ms / 1000);
 	if (seconds < 60) return `${seconds}s`;
@@ -107,6 +119,9 @@ if (G.__piSubagentWidgetInterval) {
 	G.__piSubagentWidgetInterval = null;
 }
 
+/**
+ * Updates the widget and stops the interval if no background tasks remain.
+ */
 function updateWidget(): void {
 	updateBackgroundWidget();
 
@@ -118,18 +133,27 @@ function updateWidget(): void {
 	}
 }
 
+/**
+ * Starts periodic widget updates if not already running.
+ */
 function startWidgetUpdates(): void {
 	if (G.__piSubagentWidgetInterval) return; // Already running
 	updateWidget(); // Immediate update
 	G.__piSubagentWidgetInterval = setInterval(updateWidget, 500); // Update every 500ms
 }
 
+/**
+ * Clears foreground subagent tracking without affecting background subagents.
+ */
 function clearForegroundSubagents(): void {
 	// Only clears the foreground subagent tracking (for parallel inline display)
 	// Does NOT touch background subagents or their widget
 	runningSubagents.clear();
 }
 
+/**
+ * Clears foreground subagents while preserving background subagent tracking.
+ */
 function clearAllSubagents(): void {
 	runningSubagents.clear();
 	// Don't clear background subagents - they persist across tool calls
@@ -854,7 +878,7 @@ WHEN NOT TO USE SUBAGENTS:
 - Need real-time back-and-forth interaction`,
 		parameters: SubagentParams,
 
-		async execute(_toolCallId, params, onUpdate, ctx, signal) {
+		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			uiContext = ctx;
 			const agentScope: AgentScope = params.agentScope ?? "user";
 			const discovery = discoverAgents(ctx.cwd, agentScope);

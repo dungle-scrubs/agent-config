@@ -40,11 +40,20 @@ interface TasksState {
 	activeTaskId: string | null;
 }
 
-// Type guards
+/**
+ * Type guard to check if a message is an assistant message.
+ * @param m - Message to check
+ * @returns True if message is from assistant
+ */
 function isAssistantMessage(m: AgentMessage): m is AssistantMessage {
 	return m.role === "assistant" && Array.isArray(m.content);
 }
 
+/**
+ * Extracts all text content from an assistant message.
+ * @param message - Assistant message to extract from
+ * @returns Concatenated text content
+ */
 function getTextContent(message: AssistantMessage): string {
 	return message.content
 		.filter((block): block is TextContent => block.type === "text")
@@ -52,7 +61,10 @@ function getTextContent(message: AssistantMessage): string {
 		.join("\n");
 }
 
-// Generate unique task ID
+/**
+ * Generates a unique task ID using timestamp and random string.
+ * @returns Unique task identifier
+ */
 function generateTaskId(): string {
 	return `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
@@ -96,7 +108,12 @@ function _extractTasksFromText(text: string): string[] {
 	return [...new Set(tasks)]; // Dedupe
 }
 
-// Check for task completion markers in text
+/**
+ * Finds tasks marked as completed in the given text.
+ * @param text - Text to search for completion markers
+ * @param tasks - Tasks to check for completion
+ * @returns Array of completed task IDs
+ */
 function findCompletedTasks(text: string, tasks: Task[]): string[] {
 	const completed: string[] = [];
 
@@ -122,10 +139,19 @@ function findCompletedTasks(text: string, tasks: Task[]): string[] {
 	return completed;
 }
 
+/**
+ * Escapes special regex characters in a string.
+ * @param str - String to escape
+ * @returns Escaped string safe for use in regex
+ */
 function escapeRegex(str: string): string {
 	return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Registers task management tools, commands, and widget.
+ * @param pi - Extension API for registering tools, commands, and event handlers
+ */
 export default function tasksExtension(pi: ExtensionAPI): void {
 	// Skip in subagent workers - they don't need task management UI
 	if (process.env.PI_IS_SUBAGENT === "1") {
@@ -680,6 +706,7 @@ IMPORTANT RULES:
 		async execute(
 			_toolCallId: string,
 			params: { action: string; task?: string; tasks?: string[]; index?: number; indices?: number[] },
+			_signal: AbortSignal | undefined,
 			_onUpdate: any,
 			ctx: ExtensionContext
 		) {

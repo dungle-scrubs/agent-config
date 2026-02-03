@@ -73,6 +73,11 @@ const MATCHER_FIELDS: Record<string, string> = {
 	// Add more as needed
 };
 
+/**
+ * Loads hooks configuration from project or global settings.
+ * @param cwd - Current working directory to search for project config
+ * @returns Hooks configuration object
+ */
 function loadHooksConfig(cwd: string): HooksConfig {
 	// Try project-local first, then global
 	const locations = [
@@ -96,6 +101,12 @@ function loadHooksConfig(cwd: string): HooksConfig {
 	return {};
 }
 
+/**
+ * Checks if a value matches a regex pattern.
+ * @param value - Value to test
+ * @param pattern - Regex pattern (empty/undefined matches all)
+ * @returns True if value matches pattern
+ */
 function matchesPattern(value: string | undefined, pattern: string | undefined): boolean {
 	if (!pattern || pattern === "" || pattern === "*") return true;
 	if (!value) return false;
@@ -106,6 +117,14 @@ function matchesPattern(value: string | undefined, pattern: string | undefined):
 	}
 }
 
+/**
+ * Runs a command-type hook as a subprocess.
+ * @param handler - Hook handler configuration
+ * @param eventData - Event data to pass to the command
+ * @param cwd - Working directory for the command
+ * @param signal - Optional abort signal
+ * @returns Hook result with ok status and optional context
+ */
 async function runCommandHook(
 	handler: HookHandler,
 	eventData: Record<string, unknown>,
@@ -183,6 +202,15 @@ async function runCommandHook(
 	});
 }
 
+/**
+ * Runs an agent-type hook by spawning a pi subprocess.
+ * @param handler - Hook handler configuration
+ * @param eventData - Event data to include in prompt
+ * @param cwd - Working directory for the agent
+ * @param agentsDir - Directory containing agent definitions
+ * @param signal - Optional abort signal
+ * @returns Hook result with ok status and optional context
+ */
 async function runAgentHook(
 	handler: HookHandler,
 	eventData: Record<string, unknown>,
@@ -284,6 +312,10 @@ async function runAgentHook(
 	});
 }
 
+/**
+ * Registers Claude Code-style hooks for Pi events.
+ * @param pi - Extension API for registering event handlers
+ */
 export default function (pi: ExtensionAPI) {
 	let hooksConfig: HooksConfig = {};
 	let agentsDir = "";

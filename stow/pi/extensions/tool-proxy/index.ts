@@ -16,6 +16,10 @@ let client: Client | null = null;
 let connecting: Promise<Client> | null = null;
 const baseUrl = process.env.TOOL_PROXY_URL || "http://localhost:3100";
 
+/**
+ * Creates a new MCP client connection to tool-proxy.
+ * @returns Connected MCP client instance
+ */
 async function createClient(): Promise<Client> {
 	const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
 	const c = new Client({ name: "pi-tool-proxy-bridge", version: "1.0.0" });
@@ -33,6 +37,10 @@ async function createClient(): Promise<Client> {
 	return c;
 }
 
+/**
+ * Gets or creates an MCP client connection with deduplication.
+ * @returns MCP client instance (existing or newly created)
+ */
 async function getClient(): Promise<Client> {
 	if (client) return client;
 	if (connecting) return connecting;
@@ -46,6 +54,12 @@ async function getClient(): Promise<Client> {
 	return connecting;
 }
 
+/**
+ * Calls a tool via MCP with automatic retry on connection failure.
+ * @param name - Tool name to call
+ * @param args - Arguments to pass to the tool
+ * @returns Tool execution result
+ */
 async function callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
 	const c = await getClient();
 	try {
@@ -59,6 +73,9 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
 	}
 }
 
+/**
+ * Closes the MCP client connection if open.
+ */
 async function closeClient() {
 	if (client) {
 		await client.close();
@@ -74,6 +91,11 @@ type ToolProxyResult = {
 	[key: string]: unknown;
 };
 
+/**
+ * Formats a tool-proxy result into standard tool result format.
+ * @param result - Raw result from tool-proxy
+ * @returns Formatted tool result with content array
+ */
 function formatResult(result: unknown) {
 	const r = result as ToolProxyResult;
 	const content = r?.content;
@@ -86,7 +108,10 @@ function formatResult(result: unknown) {
 	};
 }
 
-// === Extension ===
+/**
+ * Registers tool-proxy bridge tools (discover_tools, execute_tool, list_apps, etc.).
+ * @param pi - Extension API for registering tools and event handlers
+ */
 export default function (pi: ExtensionAPI) {
 	// Register discover_tools
 	pi.registerTool({
@@ -106,7 +131,7 @@ WORKFLOW: discover_tools -> execute_tool`,
 			}),
 		}),
 
-		async execute(_toolCallId, params, _onUpdate, _ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			try {
 				const result = await callTool("discover_tools", {
 					query: params.query,
@@ -147,7 +172,7 @@ WHEN TO USE:
 			args: Type.Optional(Type.Object({}, { additionalProperties: true, description: "Tool arguments" })),
 		}),
 
-		async execute(_toolCallId, params, _onUpdate, ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			try {
 				const result = await callTool("execute_tool", {
 					app: params.app,
@@ -183,7 +208,7 @@ WHEN TO USE:
 		description: "List all available apps in tool-proxy and their tools.",
 		parameters: Type.Object({}),
 
-		async execute(_toolCallId, _params, _onUpdate, _ctx, _signal) {
+		async execute(_toolCallId, _params, _signal, _onUpdate, _ctx) {
 			try {
 				const result = await callTool("list_apps", {});
 				return formatResult(result);
@@ -206,7 +231,7 @@ WHEN TO USE:
 			app: Type.String({ description: 'App name, e.g., "github", "notion"' }),
 		}),
 
-		async execute(_toolCallId, params, _onUpdate, _ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			try {
 				const result = await callTool("get_app_context", { app: params.app });
 				return formatResult(result);
@@ -248,7 +273,7 @@ SANDBOX: Runs in isolated container with network access only to allowed domains.
 			timeout: Type.Optional(Type.Number({ description: "Execution timeout in ms (max 300000, default 60000)" })),
 		}),
 
-		async execute(_toolCallId, params, _onUpdate, _ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			try {
 				const result = await callTool("execute_code", {
 					code: params.code,

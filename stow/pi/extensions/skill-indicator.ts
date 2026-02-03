@@ -2,21 +2,40 @@ import type { ExtensionAPI, ExtensionContext, AgentToolUpdateCallback } from "@m
 import { createReadTool } from "@mariozechner/pi-coding-agent";
 import { Text, visibleWidth } from "@mariozechner/pi-tui";
 
+/**
+ * Checks if a path points to a skill file.
+ * @param path - File path to check
+ * @returns True if path is a SKILL.md file in a skills directory
+ */
 function isSkillPath(path: string): boolean {
   return path.includes("/skills/") && path.endsWith("SKILL.md");
 }
 
+/**
+ * Extracts the skill name from a skill file path.
+ * @param path - Path to SKILL.md file
+ * @returns Skill name or "unknown" if pattern doesn't match
+ */
 function getSkillName(path: string): string {
   const match = path.match(/\/skills\/([^/]+)\/SKILL\.md$/);
   return match?.[1] ?? "unknown";
 }
 
+/**
+ * Checks if content has skill frontmatter structure.
+ * @param content - File content to check
+ * @returns True if content looks like a skill file
+ */
 function isSkillContent(content: string): boolean {
   return content.startsWith("---") && 
          content.includes("\nname:") && 
          content.includes("\ndescription:");
 }
 
+/**
+ * Overrides the read tool to show skill-specific UI when reading SKILL.md files.
+ * @param pi - Extension API for registering tools
+ */
 export default function (pi: ExtensionAPI) {
   const cwd = process.cwd();
   const builtinRead = createReadTool(cwd);

@@ -22,7 +22,9 @@ interface SkillFrontmatter {
 }
 
 /**
- * Parse frontmatter from skill content
+ * Parses YAML frontmatter from skill content.
+ * @param content - Raw skill content with optional frontmatter
+ * @returns Parsed frontmatter object with skill metadata
  */
 function parseFrontmatter(content: string): SkillFrontmatter {
 	const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
@@ -49,7 +51,10 @@ function parseFrontmatter(content: string): SkillFrontmatter {
 }
 
 /**
- * Process $ARGUMENTS and $N substitutions in skill content
+ * Substitutes $ARGUMENTS, $@, and $N placeholders with actual arguments.
+ * @param content - Skill content with placeholders
+ * @param args - Space-separated argument string
+ * @returns Content with substitutions applied
  */
 function substituteArguments(content: string, args: string): string {
 	const argList = args.split(/\s+/).filter(Boolean);
@@ -71,6 +76,10 @@ function substituteArguments(content: string, args: string): string {
 	return result;
 }
 
+/**
+ * Registers skills as /skill-name commands (Claude Code style).
+ * @param pi - Extension API for registering commands
+ */
 export default function (pi: ExtensionAPI) {
 	// Load skills synchronously during extension init for autocomplete to work
 	const { skills } = loadSkills();

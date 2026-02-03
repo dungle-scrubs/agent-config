@@ -104,6 +104,11 @@ interface LSPConnection {
 
 const connections = new Map<string, LSPConnection>();
 
+/**
+ * Determines the language type for a file based on its extension.
+ * @param filePath - Path to the file
+ * @returns Language identifier or null if not supported
+ */
 function getLanguageForFile(filePath: string): string | null {
 	const ext = path.extname(filePath).toLowerCase();
 	// Check primary language configs (skip fallbacks like python_pyright)
@@ -117,8 +122,10 @@ function getLanguageForFile(filePath: string): string | null {
 }
 
 /**
- * Find the project root for a given file path by walking up the directory tree
- * looking for project markers (package.json, pyproject.toml, etc.)
+ * Finds the project root by walking up looking for language-specific markers.
+ * @param filePath - Path to start searching from
+ * @param language - Language identifier for marker selection
+ * @returns Project root directory or file's directory as fallback
  */
 function findProjectRoot(filePath: string, language: string): string {
 	const config = SERVER_CONFIGS[language];
@@ -146,18 +153,30 @@ function findProjectRoot(filePath: string, language: string): string {
 	return path.dirname(path.resolve(filePath));
 }
 
+/**
+ * Converts a file path to a file:// URI.
+ * @param filePath - File path to convert
+ * @returns File URI string
+ */
 function filePathToUri(filePath: string): string {
 	const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
 	return `file://${absolutePath}`;
 }
 
+/**
+ * Converts a file:// URI to a file path.
+ * @param uri - File URI to convert
+ * @returns File path string
+ */
 function uriToFilePath(uri: string): string {
 	return uri.replace("file://", "");
 }
 
 /**
- * Get or create a connection for the given language and file.
- * The project root is auto-detected from the file path.
+ * Gets or creates an LSP connection for a file, auto-detecting project root.
+ * @param language - Language identifier
+ * @param filePath - File path to find project root from
+ * @returns LSP connection or null if server unavailable
  */
 async function getOrCreateConnectionForFile(language: string, filePath: string): Promise<LSPConnection | null> {
 	const absolutePath = path.resolve(filePath);
@@ -166,6 +185,12 @@ async function getOrCreateConnectionForFile(language: string, filePath: string):
 	return getOrCreateConnection(language, projectRoot);
 }
 
+/**
+ * Gets or creates an LSP connection for a language and project root.
+ * @param language - Language identifier
+ * @param rootPath - Project root directory
+ * @returns LSP connection or null if server unavailable
+ */
 async function getOrCreateConnection(language: string, rootPath: string): Promise<LSPConnection | null> {
 	const key = `${language}:${rootPath}`;
 
@@ -283,6 +308,11 @@ async function getOrCreateConnection(language: string, rootPath: string): Promis
 	}
 }
 
+/**
+ * Opens a document in the LSP server if not already open.
+ * @param conn - LSP connection to use
+ * @param filePath - Path to the document to open
+ */
 async function openDocument(conn: LSPConnection, filePath: string): Promise<void> {
 	const uri = filePathToUri(filePath);
 
@@ -318,6 +348,11 @@ async function openDocument(conn: LSPConnection, filePath: string): Promise<void
 	conn.openDocuments.set(uri, { version: 1, content });
 }
 
+/**
+ * Formats an LSP location as "file:line:column" string.
+ * @param loc - Location or LocationLink to format
+ * @returns Formatted location string
+ */
 function formatLocation(loc: Location | LocationLink): string {
 	const uri = "targetUri" in loc ? loc.targetUri : loc.uri;
 	const range = "targetRange" in loc ? loc.targetRange : loc.range;
@@ -325,6 +360,11 @@ function formatLocation(loc: Location | LocationLink): string {
 	return `${filePath}:${range.start.line + 1}:${range.start.character + 1}`;
 }
 
+/**
+ * Formats an array of LSP locations as newline-separated strings.
+ * @param locations - Locations to format
+ * @returns Formatted locations or "No results found"
+ */
 function formatLocations(locations: (Location | LocationLink)[] | Location | LocationLink | null): string {
 	if (!locations) return "No results found";
 
@@ -334,6 +374,11 @@ function formatLocations(locations: (Location | LocationLink)[] | Location | Loc
 	return locs.map(formatLocation).join("\n");
 }
 
+/**
+ * Formats LSP symbols as "name (kind) - location" strings.
+ * @param symbols - Symbols to format
+ * @returns Formatted symbols or "No symbols found"
+ */
 function formatSymbols(symbols: (SymbolInformation | DocumentSymbol | WorkspaceSymbol)[] | null): string {
 	if (!symbols || symbols.length === 0) return "No symbols found";
 
@@ -356,6 +401,11 @@ function formatSymbols(symbols: (SymbolInformation | DocumentSymbol | WorkspaceS
 		.join("\n");
 }
 
+/**
+ * Converts an LSP symbol kind number to a human-readable string.
+ * @param kind - Symbol kind number from LSP protocol
+ * @returns Human-readable kind name
+ */
 function symbolKindToString(kind: number): string {
 	const kinds: Record<number, string> = {
 		1: "File",
@@ -388,6 +438,11 @@ function symbolKindToString(kind: number): string {
 	return kinds[kind] || "Unknown";
 }
 
+/**
+ * Formats LSP hover information as readable text.
+ * @param hover - Hover result from LSP server
+ * @returns Formatted hover text or "No hover information available"
+ */
 function formatHover(hover: Hover | null): string {
 	if (!hover) return "No hover information available";
 
@@ -400,6 +455,10 @@ function formatHover(hover: Hover | null): string {
 	return "No hover information available";
 }
 
+/**
+ * Registers LSP tools for definition, references, hover, and symbol search.
+ * @param pi - Extension API for registering tools and event handlers
+ */
 export default function lspExtension(pi: ExtensionAPI) {
 	// Tool: Go to Definition
 	pi.registerTool({
@@ -418,7 +477,7 @@ SUPPORTED: TypeScript, Python (ty/pyright), Rust, Swift`,
 			line: Type.Number({ description: "Line number (1-indexed)" }),
 			character: Type.Number({ description: "Character/column position (1-indexed)" }),
 		}),
-		async execute(_toolCallId, params, _onUpdate, ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const filePath = path.isAbsolute(params.file) ? params.file : path.resolve(ctx.cwd, params.file);
 			const language = getLanguageForFile(filePath);
 
@@ -488,7 +547,7 @@ WHEN TO USE:
 				Type.Boolean({ description: "Include the declaration in results (default: true)" })
 			),
 		}),
-		async execute(_toolCallId, params, _onUpdate, ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const filePath = path.isAbsolute(params.file) ? params.file : path.resolve(ctx.cwd, params.file);
 			const language = getLanguageForFile(filePath);
 
@@ -552,7 +611,7 @@ WHEN TO USE:
 			line: Type.Number({ description: "Line number (1-indexed)" }),
 			character: Type.Number({ description: "Character/column position (1-indexed)" }),
 		}),
-		async execute(_toolCallId, params, _onUpdate, ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const filePath = path.isAbsolute(params.file) ? params.file : path.resolve(ctx.cwd, params.file);
 			const language = getLanguageForFile(filePath);
 
@@ -612,7 +671,7 @@ WHEN TO USE:
 		parameters: Type.Object({
 			file: Type.String({ description: "Path to the file" }),
 		}),
-		async execute(_toolCallId, params, _onUpdate, ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const filePath = path.isAbsolute(params.file) ? params.file : path.resolve(ctx.cwd, params.file);
 			const language = getLanguageForFile(filePath);
 
@@ -674,7 +733,7 @@ WHEN TO USE:
 				Type.String({ description: "Language to search in: 'typescript', 'python', 'rust', or 'swift'" })
 			),
 		}),
-		async execute(_toolCallId, params, _onUpdate, _ctx, _signal) {
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const language = params.language || "typescript";
 
 			// For workspace symbols, we need an active connection
@@ -739,7 +798,7 @@ WHEN TO USE:
 		label: "LSP Status",
 		description: "Check which language servers are running and their capabilities.",
 		parameters: Type.Object({}),
-		async execute(_toolCallId, _params, _onUpdate, _ctx, _signal) {
+		async execute(_toolCallId, _params, _signal, _onUpdate, _ctx) {
 			const lines: string[] = ["LSP Server Status:"];
 
 			// Show running connections
