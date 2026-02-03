@@ -1,5 +1,5 @@
 ---
-name: changelog
+name: custom-changelog
 description: "Changelogs following Keep a Changelog v1.1.0 standards. Triggers: changelog, CHANGELOG.md, release notes, version bump, document changes, release history."
 allowed-tools: Read, Write, Edit, Grep, Glob
 ---
