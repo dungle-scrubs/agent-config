@@ -19,10 +19,10 @@
 		"base@local": true,
 		"games@local": true,
 		"swift-lsp@claude-plugins-official": true,
-		"tool-proxy@tool-proxy": true,
 		"impeccable@impeccable": true,
 		"fuse@local": true,
-		"rust-analyzer-lsp@claude-plugins-official": true
+		"rust-analyzer-lsp@claude-plugins-official": true,
+		"tool-proxy@tool-proxy": true
 	},
 	"alwaysThinkingEnabled": true,
 	"preferences": {

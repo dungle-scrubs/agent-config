@@ -19,6 +19,24 @@ The `bg_bash` tool returns immediately with a task ID. Use `task_output` to chec
 
 ---
 
+## Claude Code Directories
+
+Claude Code uses multiple configuration directories. Always verify which directory applies:
+
+| Directory | Purpose |
+|-----------|---------|
+| `~/.claude/` | Global user settings, plugins, marketplaces |
+| `~/.claude-{project}/` | Project-specific settings (e.g., `~/.claude-fuse/` for fuse) |
+
+**Key files in each:**
+- `settings.json` - Enabled plugins, hooks, permissions
+- `plugins/cache/` - Cached plugin files (may differ between global and project)
+- `plugins/installed_plugins.json` - Plugin installation records
+
+**Common pitfall:** Editing `~/.claude/` when the project uses `~/.claude-{project}/` (or vice versa). Plugin `.mcp.json` files, hooks, and settings are project-scoped.
+
+---
+
 ## Dev Server Ports
 
 Projects with explicitly assigned ports (to avoid conflicts):

@@ -731,7 +731,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		},
 	});
 
-	// Intercept bash commands with trailing & and block them
+	// Intercept bash commands with & backgrounding and block them
 	// This prevents the common mistake of using `bash &` which hangs forever
 	pi.on("tool_call", async (event, _ctx) => {
 		if (event.toolName !== "bash") return;
@@ -739,18 +739,30 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		const command = event.input?.command as string | undefined;
 		if (!command) return;
 
-		// Detect trailing & (but not &&, &>, or &>>)
-		// Match: command ending with & preceded by non-& and not followed by > or &
-		const trimmed = command.trim();
-		const hasTrailingAmpersand = /(?<!&)&\s*$/.test(trimmed) && !trimmed.endsWith("&&");
+		// Detect & used for backgrounding
+		// Key insight: a backgrounding & is a SINGLE & that is:
+		// - Not preceded by another & (that would be &&)
+		// - Not followed by > (that would be &> redirect)
+		// - Followed by: end of string, whitespace+newline, semicolon, ), or space+word
+		
+		// Pattern: single & followed by end, newline, semicolon, paren, or space+word
+		// (?<!&) = not preceded by &
+		// (?!>) = not followed by > (excludes &>)
+		// (?!&) = not followed by & (excludes &&)
+		const backgroundPattern = /(?<!&)&(?!>)(?!&)(\s*$|\s*\n|\s*;|\s*\)|\s+[a-zA-Z])/;
+		
+		const hasBackgroundAmpersand = backgroundPattern.test(command);
 
-		if (hasTrailingAmpersand) {
+		// Exclude if & only appears inside heredocs
+		// Simple heuristic: if there's a heredoc marker, be conservative
+		const hasHeredoc = /<<[-]?\s*['"]?\w+['"]?/.test(command);
+
+		if (hasBackgroundAmpersand && !hasHeredoc) {
 			return {
 				block: true,
 				reason:
 					"Cannot use & to background processes in bash - it will hang forever.\n" +
-					"Use the bg_bash tool instead:\n\n" +
-					`  bg_bash: ${trimmed.replace(/&\s*$/, "").trim()}`,
+					"Use the bg_bash tool instead for background tasks.",
 			};
 		}
 	});
