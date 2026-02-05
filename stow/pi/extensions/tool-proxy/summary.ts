@@ -116,7 +116,7 @@ export default function toolProxySummary(pi: ExtensionAPI): void {
     return {
       content: [{ type: "text", text: summary }],
       details: {
-        ...event.details,
+        ...(typeof event.details === "object" && event.details !== null ? event.details : {}),
         [SUMMARY_MARKER]: true,
         _fullText: fullText,
       },

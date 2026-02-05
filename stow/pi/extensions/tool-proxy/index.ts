@@ -11,8 +11,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Type } from "@sinclair/typebox";
 
-import toolProxyStatus from "./status.ts";
-import toolProxySummary from "./summary.ts";
+import toolProxyStatus from "./status.js";
+import toolProxySummary from "./summary.js";
 
 // === MCP Client ===
 let client: Client | null = null;
