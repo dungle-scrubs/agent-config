@@ -2,7 +2,7 @@
  * Tool Proxy Bridge Extension for Pi
  *
  * Connects to tool-proxy's HTTP MCP server and exposes its tools.
- * Based on openclaw's tool-proxy-bridge extension.
+ * Includes status indicator and output summarization.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -10,6 +10,9 @@ import { Text } from "@mariozechner/pi-tui";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Type } from "@sinclair/typebox";
+
+import toolProxyStatus from "./status.ts";
+import toolProxySummary from "./summary.ts";
 
 // === MCP Client ===
 let client: Client | null = null;
@@ -110,9 +113,13 @@ function formatResult(result: unknown) {
 
 /**
  * Registers tool-proxy bridge tools (discover_tools, execute_tool, list_apps, etc.).
+ * Also sets up status indicator and output summarization.
  * @param pi - Extension API for registering tools and event handlers
  */
 export default function (pi: ExtensionAPI) {
+	// Register status indicator and output summarization
+	toolProxyStatus(pi);
+	toolProxySummary(pi);
 	// Register discover_tools
 	pi.registerTool({
 		name: "discover_tools",
@@ -149,10 +156,26 @@ WORKFLOW: discover_tools -> execute_tool`,
 
 		renderCall(args, theme) {
 			return new Text(
-				theme.fg("toolTitle", theme.bold("discover_tools ")) + theme.fg("accent", `"${args.query}"`),
+				theme.fg("toolTitle", theme.bold("tool-proxy: ")) +
+					theme.fg("muted", "discover_tools ") +
+					theme.fg("accent", `"${args.query}"`),
 				0,
 				0
 			);
+		},
+
+		renderResult(result, { expanded }, theme) {
+			const details = result.details as { _fullText?: string } | undefined;
+			const textContent = result.content.find((c: { type: string }) => c.type === "text") as
+				| { text: string }
+				| undefined;
+			const summary = textContent?.text ?? "✓ done";
+
+			if (expanded && details?._fullText) {
+				return new Text(summary + "\n\n" + theme.fg("dim", details._fullText), 0, 0);
+			}
+
+			return new Text(theme.fg("success", summary), 0, 0);
 		},
 	});
 
@@ -192,12 +215,28 @@ WHEN TO USE:
 
 		renderCall(args, theme) {
 			return new Text(
-				theme.fg("toolTitle", theme.bold("execute_tool ")) +
+				theme.fg("toolTitle", theme.bold("tool-proxy: ")) +
+					theme.fg("muted", "execute_tool ") +
 					theme.fg("accent", `${args.app}/`) +
 					theme.fg("warning", args.tool),
 				0,
 				0
 			);
+		},
+
+		renderResult(result, { expanded }, theme) {
+			const details = result.details as { _fullText?: string } | undefined;
+			const textContent = result.content.find((c: { type: string }) => c.type === "text") as
+				| { text: string }
+				| undefined;
+			const summary = textContent?.text ?? "✓ done";
+
+			if (expanded && details?._fullText) {
+				// Show full content when expanded (Ctrl+O)
+				return new Text(summary + "\n\n" + theme.fg("dim", details._fullText), 0, 0);
+			}
+
+			return new Text(theme.fg("success", summary), 0, 0);
 		},
 	});
 
@@ -219,6 +258,24 @@ WHEN TO USE:
 					isError: true,
 				};
 			}
+		},
+
+		renderCall(_args, theme) {
+			return new Text(theme.fg("toolTitle", theme.bold("tool-proxy: ")) + theme.fg("muted", "list_apps"), 0, 0);
+		},
+
+		renderResult(result, { expanded }, theme) {
+			const details = result.details as { _fullText?: string } | undefined;
+			const textContent = result.content.find((c: { type: string }) => c.type === "text") as
+				| { text: string }
+				| undefined;
+			const summary = textContent?.text ?? "✓ done";
+
+			if (expanded && details?._fullText) {
+				return new Text(summary + "\n\n" + theme.fg("dim", details._fullText), 0, 0);
+			}
+
+			return new Text(theme.fg("success", summary), 0, 0);
 		},
 	});
 
@@ -242,6 +299,30 @@ WHEN TO USE:
 					isError: true,
 				};
 			}
+		},
+
+		renderCall(args, theme) {
+			return new Text(
+				theme.fg("toolTitle", theme.bold("tool-proxy: ")) +
+					theme.fg("muted", "get_app_context ") +
+					theme.fg("accent", args.app),
+				0,
+				0
+			);
+		},
+
+		renderResult(result, { expanded }, theme) {
+			const details = result.details as { _fullText?: string } | undefined;
+			const textContent = result.content.find((c: { type: string }) => c.type === "text") as
+				| { text: string }
+				| undefined;
+			const summary = textContent?.text ?? "✓ done";
+
+			if (expanded && details?._fullText) {
+				return new Text(summary + "\n\n" + theme.fg("dim", details._fullText), 0, 0);
+			}
+
+			return new Text(theme.fg("success", summary), 0, 0);
 		},
 	});
 
@@ -294,10 +375,26 @@ SANDBOX: Runs in isolated container with network access only to allowed domains.
 		renderCall(args, theme) {
 			const preview = args.code.length > 50 ? `${args.code.slice(0, 50)}...` : args.code;
 			return new Text(
-				theme.fg("toolTitle", theme.bold("execute_code ")) + theme.fg("dim", preview.replace(/\n/g, " ")),
+				theme.fg("toolTitle", theme.bold("tool-proxy: ")) +
+					theme.fg("muted", "execute_code ") +
+					theme.fg("dim", preview.replace(/\n/g, " ")),
 				0,
 				0
 			);
+		},
+
+		renderResult(result, { expanded }, theme) {
+			const details = result.details as { _fullText?: string } | undefined;
+			const textContent = result.content.find((c: { type: string }) => c.type === "text") as
+				| { text: string }
+				| undefined;
+			const summary = textContent?.text ?? "✓ done";
+
+			if (expanded && details?._fullText) {
+				return new Text(summary + "\n\n" + theme.fg("dim", details._fullText), 0, 0);
+			}
+
+			return new Text(theme.fg("success", summary), 0, 0);
 		},
 	});
 
