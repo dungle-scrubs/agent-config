@@ -6,6 +6,11 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# === Git wrapper (blocks --no-verify) ===
+mkdir -p ~/bin
+ln -sf "$SCRIPT_DIR/stow/shared/bin/git" ~/bin/git
+echo "Git wrapper linked to ~/bin/git (ensure ~/bin is before /usr/bin in PATH)"
+
 # === Claude Code ===
 # Stow claude-code specific files
 stow -d "$SCRIPT_DIR/stow/claude-code" -t ~/.claude .

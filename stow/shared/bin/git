@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Git wrapper that blocks --no-verify flag
+# Install: stow to ~/bin and ensure ~/bin is before /usr/bin in PATH
+
+set -euo pipefail
+
+# Find the real git (skip this script)
+REAL_GIT=""
+for dir in /opt/homebrew/bin /usr/local/bin /usr/bin; do
+    if [[ -x "$dir/git" ]]; then
+        REAL_GIT="$dir/git"
+        break
+    fi
+done
+
+if [[ -z "$REAL_GIT" ]]; then
+    echo "Error: Could not find real git binary" >&2
+    exit 1
+fi
+
+# Check for --no-verify or -n flag (only for commit)
+for arg in "$@"; do
+    case "$arg" in
+        commit)
+            # Only check for --no-verify on commit command
+            for check_arg in "$@"; do
+                case "$check_arg" in
+                    --no-verify|-n)
+                        echo "┌──────────────────────────────────────────────────────┐" >&2
+                        echo "│  ❌ --no-verify is disabled                          │" >&2
+                        echo "│                                                      │" >&2
+                        echo "│  Fix the issues instead of bypassing hooks.          │" >&2
+                        echo "│  If this is a legitimate emergency, use:             │" >&2
+                        echo "│                                                      │" >&2
+                        echo "│    GIT_ALLOW_NO_VERIFY=1 git commit --no-verify ...  │" >&2
+                        echo "└──────────────────────────────────────────────────────┘" >&2
+                        exit 1
+                        ;;
+                esac
+            done
+            break
+            ;;
+    esac
+done
+
+# Allow override for emergencies
+if [[ "${GIT_ALLOW_NO_VERIFY:-}" == "1" ]]; then
+    exec "$REAL_GIT" "$@"
+fi
+
+exec "$REAL_GIT" "$@"
