@@ -114,9 +114,10 @@ AUTOMATIC FIRECRAWL FALLBACK:
 				});
 
 				if (!response.ok) {
+					const error = `HTTP ${response.status}: ${response.statusText}`;
 					return {
-						content: [{ type: "text", text: `HTTP ${response.status}: ${response.statusText}` }],
-						details: { status: response.status, url: params.url, isError: true },
+						content: [{ type: "text", text: error }],
+						details: { status: response.status, url: params.url, error, isError: true },
 					};
 				}
 
