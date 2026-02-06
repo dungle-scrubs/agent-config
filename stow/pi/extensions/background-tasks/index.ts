@@ -16,8 +16,8 @@
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { keyHint, type ExtensionAPI, type ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { Key, matchesKey, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
 // ANSI escape codes for Catppuccin Macchiato colors (medium-dark variant)
@@ -228,7 +228,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			updateWidget(ctx);
 
 			return {
-				details: {},
+				details: { taskId, command: params.command },
 				content: [
 					{
 						type: "text",
@@ -236,6 +236,17 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 					},
 				],
 			};
+		},
+
+		renderCall(args, theme) {
+			const cmd = truncateCommand(args.command as string, 60);
+			return new Text(theme.fg("toolTitle", theme.bold("bg_bash ")) + theme.fg("muted", cmd), 0, 0);
+		},
+
+		renderResult(result, _options, theme) {
+			const details = result.details as { taskId?: string; command?: string } | undefined;
+			const taskId = details?.taskId ?? "?";
+			return new Text(theme.fg("success", `⚙ Started ${taskId}`), 0, 0);
 		},
 	});
 
@@ -254,7 +265,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			if (!task) {
 				return {
-					details: {},
+					details: { error: true },
 					content: [
 						{
 							type: "text",
@@ -278,7 +289,16 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 					: `Status: ${task.status} (exit code: ${task.exitCode}, duration: ${duration})`;
 
 			return {
-				details: {},
+				details: {
+					taskId: params.taskId,
+					command: task.command,
+					status: task.status,
+					exitCode: task.exitCode,
+					duration,
+					outputLines: output.split("\n").length,
+					outputBytes: task.outputBytes,
+					output,
+				},
 				content: [
 					{
 						type: "text",
@@ -286,6 +306,78 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 					},
 				],
 			};
+		},
+
+		renderCall(args, theme) {
+			const taskId = args.taskId as string;
+			const task = tasks.get(taskId);
+			const cmd = task ? truncateCommand(task.command, 40) : "";
+			let text = theme.fg("toolTitle", theme.bold("task_output ")) + theme.fg("accent", taskId);
+			if (cmd) text += theme.fg("dim", ` ${cmd}`);
+			return new Text(text, 0, 0);
+		},
+
+		renderResult(result, { expanded }, theme) {
+			const details = result.details as {
+				taskId?: string;
+				command?: string;
+				status?: string;
+				exitCode?: number | null;
+				duration?: string;
+				outputLines?: number;
+				outputBytes?: number;
+				output?: string;
+				error?: boolean;
+			} | undefined;
+
+			// Error case — show full text
+			if (details?.error) {
+				const text = result.content[0];
+				return new Text(theme.fg("error", text?.type === "text" ? text.text : "Error"), 0, 0);
+			}
+
+			const status = details?.status ?? "unknown";
+			const duration = details?.duration ?? "";
+			const outputLines = details?.outputLines ?? 0;
+
+			// Status icon
+			let icon: string;
+			let statusColor: "success" | "warning" | "error" | "accent";
+			switch (status) {
+				case "running":
+					icon = "●";
+					statusColor = "accent";
+					break;
+				case "completed":
+					icon = "✓";
+					statusColor = "success";
+					break;
+				default:
+					icon = "✗";
+					statusColor = "error";
+			}
+
+			// Compact summary (default view)
+			let text = theme.fg(statusColor, `${icon} ${status}`) + theme.fg("muted", ` (${duration})`);
+			text += theme.fg("dim", ` ${outputLines} lines`);
+
+			if (!expanded) {
+				text += ` ${keyHint("expandTools", "to expand")}`;
+			}
+
+			// Expanded: show last 20 lines of output
+			if (expanded && details?.output) {
+				const lines = details.output.split("\n");
+				const tail = lines.slice(-20);
+				if (lines.length > 20) {
+					text += `\n${theme.fg("dim", `... (${lines.length - 20} lines above)`)}`;
+				}
+				for (const line of tail) {
+					text += `\n${theme.fg("dim", line)}`;
+				}
+			}
+
+			return new Text(text, 0, 0);
 		},
 	});
 
@@ -302,7 +394,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			if (!task) {
 				return {
-					details: {},
+					details: { error: true },
 					content: [
 						{
 							type: "text",
@@ -315,7 +407,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			const duration = formatDuration((task.endTime || Date.now()) - task.startTime);
 
 			return {
-				details: {},
+				details: { taskId: task.id, status: task.status, exitCode: task.exitCode, duration },
 				content: [
 					{
 						type: "text",
@@ -335,6 +427,23 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 				],
 			};
 		},
+
+		renderCall(args, theme) {
+			return new Text(theme.fg("toolTitle", theme.bold("task_status ")) + theme.fg("accent", args.taskId as string), 0, 0);
+		},
+
+		renderResult(result, _options, theme) {
+			const details = result.details as { status?: string; duration?: string; error?: boolean } | undefined;
+			if (details?.error) {
+				const text = result.content[0];
+				return new Text(theme.fg("error", text?.type === "text" ? text.text : "Not found"), 0, 0);
+			}
+			const status = details?.status ?? "unknown";
+			const duration = details?.duration ?? "";
+			const icon = status === "running" ? "●" : status === "completed" ? "✓" : "✗";
+			const color: "success" | "accent" | "error" = status === "completed" ? "success" : status === "running" ? "accent" : "error";
+			return new Text(theme.fg(color, `${icon} ${status}`) + theme.fg("muted", ` (${duration})`), 0, 0);
+		},
 	});
 
 	// Tool: Kill a background task
@@ -350,14 +459,14 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			if (!task) {
 				return {
-					details: {},
+					details: { error: true },
 					content: [{ type: "text", text: `Task not found: ${params.taskId}` }],
 				};
 			}
 
 			if (task.status !== "running" || !task.process) {
 				return {
-					details: {},
+					details: { error: true },
 					content: [{ type: "text", text: `Task ${params.taskId} is not running (status: ${task.status})` }],
 				};
 			}
@@ -370,9 +479,22 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			updateWidget(ctx);
 
 			return {
-				details: {},
+				details: { taskId: params.taskId, killed: true },
 				content: [{ type: "text", text: `Killed task ${params.taskId}` }],
 			};
+		},
+
+		renderCall(args, theme) {
+			return new Text(theme.fg("toolTitle", theme.bold("task_kill ")) + theme.fg("error", args.taskId as string), 0, 0);
+		},
+
+		renderResult(result, _options, theme) {
+			const details = result.details as { killed?: boolean; error?: boolean } | undefined;
+			if (details?.error) {
+				const text = result.content[0];
+				return new Text(theme.fg("error", text?.type === "text" ? text.text : "Error"), 0, 0);
+			}
+			return new Text(theme.fg("warning", "✗ Killed"), 0, 0);
 		},
 	});
 
