@@ -297,9 +297,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		},
 
 		renderCall(args, theme) {
-			const cmd = truncateCommand(args.command as string, 60);
+			const cmd = args.command as string;
 			const bg = args.background ? theme.fg("dim", " (detached)") : "";
-			return new Text(theme.fg("toolTitle", theme.bold("bg_bash ")) + theme.fg("muted", cmd) + bg, 0, 0);
+			return new Text(theme.fg("bashMode", theme.bold(`$ ${cmd}`)) + bg, 0, 0);
 		},
 
 		renderResult(result, { expanded, isPartial }, theme) {
@@ -318,52 +318,45 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			// Fire-and-forget: compact one-liner
 			if (details?.fireAndForget) {
-				return new Text(theme.fg("success", `⚙ Started ${details.taskId ?? "?"} (detached)`), 0, 0);
+				return new Text(theme.fg("bashMode", `⚙ Started ${details.taskId ?? "?"} (detached)`), 0, 0);
 			}
 
 			const status = details?.status ?? (isPartial ? "running" : "unknown");
 			const duration = details?.duration ?? "";
 
-			// Status icon and color
-			let icon: string;
-			let statusColor: "success" | "accent" | "error";
-			switch (status) {
-				case "running":
-					icon = "●";
-					statusColor = "accent";
-					break;
-				case "completed":
-					icon = "✓";
-					statusColor = "success";
-					break;
-				default:
-					icon = "✗";
-					statusColor = "error";
+			// Output lines
+			const allLines = details?.output?.split("\n").filter((l) => l.length > 0) ?? [];
+			const maxLines = expanded ? EXPANDED_LINES : COLLAPSED_LINES;
+			const truncated = allLines.length > maxLines;
+			const tail = truncated ? allLines.slice(-maxLines) : allLines;
+
+			let text = "";
+
+			// Output
+			if (truncated) {
+				text += theme.fg("muted", `... ${allLines.length - maxLines} more lines above`) + "\n";
+			}
+			for (let i = 0; i < tail.length; i++) {
+				text += theme.fg("muted", tail[i]);
+				if (i < tail.length - 1) text += "\n";
 			}
 
-			// Header
-			let text = theme.fg(statusColor, `${icon} ${status}`);
-			if (duration) text += theme.fg("muted", ` (${duration})`);
-
-			// Output tail
-			if (details?.output) {
-				const allLines = details.output.split("\n").filter((l) => l.length > 0);
-				const maxLines = expanded ? EXPANDED_LINES : COLLAPSED_LINES;
-				const truncated = allLines.length > maxLines;
-				const tail = truncated ? allLines.slice(-maxLines) : allLines;
-
+			// Status footer
+			if (isPartial) {
+				text += `\n${theme.fg("bashMode", `Running... (${duration})`)}`;
+			} else if (status === "completed") {
 				if (truncated) {
-					text += `\n${theme.fg("dim", `  ... ${allLines.length - maxLines} more lines above`)}`;
+					text += `\n${theme.fg("muted", `... ${allLines.length - maxLines} more lines`)} ${keyHint("expandTools", "to expand")}`;
 				}
-				for (const line of tail) {
-					text += `\n${theme.fg("dim", `  ${line}`)}`;
-				}
+			} else if (status === "failed" || status === "killed") {
+				const exitCode = details?.exitCode;
+				text += `\n${theme.fg("error", `(exit ${exitCode ?? "?"})`)}`;
+			}
 
-				if (!expanded && truncated && !isPartial) {
-					text += `\n${keyHint("expandTools", "to show more")}`;
-				}
-			} else if (!isPartial) {
-				text += theme.fg("dim", " (no output)");
+			if (text === "") {
+				text = isPartial
+					? theme.fg("bashMode", `Running... (${duration})`)
+					: theme.fg("dim", "(no output)");
 			}
 
 			return new Text(text, 0, 0);
