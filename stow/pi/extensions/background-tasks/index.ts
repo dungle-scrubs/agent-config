@@ -146,14 +146,16 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		name: "bg_bash",
 		label: "Background Bash",
 		description:
-			"Run a bash command in the background. Returns immediately with a task ID. Use task_output to retrieve the output later. Good for long-running commands like builds, tests, or servers.\n\nWHEN TO USE:\n- Starting daemons or servers\n- Long-running builds or tests\n- Any process you want to run independently\n\nWARNING: Never use bash tool with & to background processes - it will hang. Use bg_bash instead.",
+			"Run a bash command in the background. By default, streams live output and waits for completion. Set background=true for fire-and-forget daemons/servers.\n\nWHEN TO USE:\n- Starting daemons or servers (with background: true)\n- Long-running builds or tests (default: streams output)\n- Any process you want to run independently\n\nWARNING: Never use bash tool with & to background processes - it will hang. Use bg_bash instead.",
 		parameters: Type.Object({
 			command: Type.String({ description: "Bash command to run in background" }),
 			timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, default: no timeout)" })),
+			background: Type.Optional(Type.Boolean({ description: "If true, return immediately without streaming output. Use for daemons/servers." })),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			const taskId = generateTaskId();
 			const cwd = ctx.cwd;
+			const fireAndForget = params.background === true;
 
 			const task: BackgroundTask = {
 				id: taskId,
@@ -178,7 +180,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			tasks.set(taskId, task);
 			cleanupOldTasks();
 
-			// Buffer output
+			// Buffer output (and stream if not fire-and-forget)
 			const onData = (data: Buffer) => {
 				if (task.outputBytes < MAX_OUTPUT_BYTES) {
 					const text = data.toString();
@@ -189,27 +191,20 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 						task.output.push("\n[Output truncated - max buffer size reached]\n");
 					}
 				}
+
+				// Stream live updates to the TUI
+				if (!fireAndForget) {
+					const output = task.output.join("");
+					const duration = formatDuration(Date.now() - task.startTime);
+					onUpdate?.({
+						content: [{ type: "text", text: output || "(no output yet)" }],
+						details: { taskId, command: params.command, status: "running", duration, output },
+					});
+				}
 			};
 
 			child.stdout?.on("data", onData);
 			child.stderr?.on("data", onData);
-
-			// Handle completion
-			child.on("close", (code) => {
-				task.endTime = Date.now();
-				task.exitCode = code;
-				task.status = code === 0 ? "completed" : "failed";
-				task.process = null;
-				updateWidget(ctx);
-			});
-
-			child.on("error", (err) => {
-				task.endTime = Date.now();
-				task.status = "failed";
-				task.output.push(`\nError: ${err.message}\n`);
-				task.process = null;
-				updateWidget(ctx);
-			});
 
 			// Handle timeout
 			if (params.timeout && params.timeout > 0) {
@@ -222,17 +217,80 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 				}, params.timeout * 1000);
 			}
 
-			// Unref so it doesn't block exit
-			child.unref();
+			// Fire-and-forget: return immediately
+			if (fireAndForget) {
+				// Handle completion in background
+				child.on("close", (code) => {
+					task.endTime = Date.now();
+					task.exitCode = code;
+					task.status = code === 0 ? "completed" : "failed";
+					task.process = null;
+					updateWidget(ctx);
+				});
+				child.on("error", (err) => {
+					task.endTime = Date.now();
+					task.status = "failed";
+					task.output.push(`\nError: ${err.message}\n`);
+					task.process = null;
+					updateWidget(ctx);
+				});
+				child.unref();
+				updateWidget(ctx);
 
+				return {
+					details: { taskId, command: params.command, fireAndForget: true },
+					content: [
+						{
+							type: "text",
+							text: `Background task started (fire-and-forget).\nTask ID: ${taskId}\nCommand: ${params.command}\nUse task_output("${taskId}") to check later.`,
+						},
+					],
+				};
+			}
+
+			// Streaming mode: wait for process to complete
 			updateWidget(ctx);
 
+			const result = await new Promise<{ exitCode: number | null; error?: string }>((resolve) => {
+				child.on("close", (code) => {
+					task.endTime = Date.now();
+					task.exitCode = code;
+					task.status = code === 0 ? "completed" : "failed";
+					task.process = null;
+					updateWidget(ctx);
+					resolve({ exitCode: code });
+				});
+				child.on("error", (err) => {
+					task.endTime = Date.now();
+					task.status = "failed";
+					task.output.push(`\nError: ${err.message}\n`);
+					task.process = null;
+					updateWidget(ctx);
+					resolve({ exitCode: null, error: err.message });
+				});
+
+				// Kill on abort signal (e.g., user presses Escape)
+				signal?.addEventListener("abort", () => {
+					if (task.status === "running" && task.process) {
+						task.process.kill("SIGTERM");
+						task.status = "killed";
+						task.endTime = Date.now();
+						task.output.push("\n[Killed: aborted by user]\n");
+						updateWidget(ctx);
+						resolve({ exitCode: null, error: "Aborted" });
+					}
+				});
+			});
+
+			const output = task.output.join("");
+			const duration = formatDuration((task.endTime || Date.now()) - task.startTime);
+
 			return {
-				details: { taskId, command: params.command },
+				details: { taskId, command: params.command, status: task.status, duration, exitCode: result.exitCode, output },
 				content: [
 					{
 						type: "text",
-						text: `Background task started.\nTask ID: ${taskId}\nCommand: ${params.command}\nUse task_output("${taskId}") to retrieve output.`,
+						text: output || "(no output)",
 					},
 				],
 			};
@@ -240,13 +298,75 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 		renderCall(args, theme) {
 			const cmd = truncateCommand(args.command as string, 60);
-			return new Text(theme.fg("toolTitle", theme.bold("bg_bash ")) + theme.fg("muted", cmd), 0, 0);
+			const bg = args.background ? theme.fg("dim", " (detached)") : "";
+			return new Text(theme.fg("toolTitle", theme.bold("bg_bash ")) + theme.fg("muted", cmd) + bg, 0, 0);
 		},
 
-		renderResult(result, _options, theme) {
-			const details = result.details as { taskId?: string; command?: string } | undefined;
-			const taskId = details?.taskId ?? "?";
-			return new Text(theme.fg("success", `⚙ Started ${taskId}`), 0, 0);
+		renderResult(result, { expanded, isPartial }, theme) {
+			const COLLAPSED_LINES = 10;
+			const EXPANDED_LINES = 50;
+
+			const details = result.details as {
+				taskId?: string;
+				command?: string;
+				status?: string;
+				duration?: string;
+				exitCode?: number | null;
+				output?: string;
+				fireAndForget?: boolean;
+			} | undefined;
+
+			// Fire-and-forget: compact one-liner
+			if (details?.fireAndForget) {
+				return new Text(theme.fg("success", `⚙ Started ${details.taskId ?? "?"} (detached)`), 0, 0);
+			}
+
+			const status = details?.status ?? (isPartial ? "running" : "unknown");
+			const duration = details?.duration ?? "";
+
+			// Status icon and color
+			let icon: string;
+			let statusColor: "success" | "accent" | "error";
+			switch (status) {
+				case "running":
+					icon = "●";
+					statusColor = "accent";
+					break;
+				case "completed":
+					icon = "✓";
+					statusColor = "success";
+					break;
+				default:
+					icon = "✗";
+					statusColor = "error";
+			}
+
+			// Header
+			let text = theme.fg(statusColor, `${icon} ${status}`);
+			if (duration) text += theme.fg("muted", ` (${duration})`);
+
+			// Output tail
+			if (details?.output) {
+				const allLines = details.output.split("\n").filter((l) => l.length > 0);
+				const maxLines = expanded ? EXPANDED_LINES : COLLAPSED_LINES;
+				const truncated = allLines.length > maxLines;
+				const tail = truncated ? allLines.slice(-maxLines) : allLines;
+
+				if (truncated) {
+					text += `\n${theme.fg("dim", `  ... ${allLines.length - maxLines} more lines above`)}`;
+				}
+				for (const line of tail) {
+					text += `\n${theme.fg("dim", `  ${line}`)}`;
+				}
+
+				if (!expanded && truncated && !isPartial) {
+					text += `\n${keyHint("expandTools", "to show more")}`;
+				}
+			} else if (!isPartial) {
+				text += theme.fg("dim", " (no output)");
+			}
+
+			return new Text(text, 0, 0);
 		},
 	});
 
