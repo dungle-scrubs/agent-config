@@ -259,7 +259,7 @@ const _BOX_WIDTH = 60;
  */
 function _padRight(str: string, len: number): string {
 	// Strip ANSI codes for length calculation
-	const stripped = str.replace(/\x1b\[[0-9;]*m/g, "");
+	const stripped = str.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g"), "");
 	const padding = Math.max(0, len - stripped.length);
 	return str + " ".repeat(padding);
 }

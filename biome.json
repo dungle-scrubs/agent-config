@@ -25,7 +25,7 @@
 				"useBlockStatements": "off"
 			},
 			"suspicious": {
-				"noControlCharactersInRegex": "off",
+				"noControlCharactersInRegex": "error",
 				"noExplicitAny": "error",
 				"noImplicitAnyLet": "error",
 				"noAssignInExpressions": "error",
