@@ -1100,6 +1100,176 @@ struct ListUsers: AsyncParsableCommand {
 3. Default output: human-readable with Rainbow colors
 4. Use `discussion` in CommandConfiguration to explain what the command returns
 
+## Cocoa Framework
+
+Always use Cocoa (`import Cocoa`) for macOS applications. Cocoa provides the full macOS application stack (AppKit, Foundation, CoreData) in a single import. For iOS, use UIKit/SwiftUI as appropriate.
+
+```swift
+// BAD - piecemeal imports for macOS
+import Foundation
+import AppKit
+import CoreGraphics
+
+// GOOD - single Cocoa import covers all macOS frameworks
+import Cocoa
+```
+
+**When to use Cocoa vs individual imports:**
+- macOS apps and scripts → `import Cocoa`
+- Cross-platform packages (iOS + macOS) → `import Foundation` + platform-specific imports
+- Pure logic modules with no UI → `import Foundation`
+
+## Self-Consuming Logging
+
+Always create structured, self-consuming logging patterns for troubleshooting during development. Logs must be useful enough that you can diagnose issues by reading them alone — no debugger required.
+
+### OSLog (Preferred)
+
+```swift
+import os
+import Cocoa
+
+/// Centralized log categories per subsystem.
+/// Each module gets its own category for filtered tailing.
+enum Log {
+    /// Subsystem matches bundle identifier for os_log filtering
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.app.dev"
+
+    static let network = Logger(subsystem: subsystem, category: "network")
+    static let database = Logger(subsystem: subsystem, category: "database")
+    static let ui = Logger(subsystem: subsystem, category: "ui")
+    static let lifecycle = Logger(subsystem: subsystem, category: "lifecycle")
+    static let auth = Logger(subsystem: subsystem, category: "auth")
+}
+
+// Usage - rich context at every call site
+func fetchUser(id: UUID) async throws -> User {
+    Log.network.info("⬆️ fetchUser started — id=\(id.uuidString, privacy: .public)")
+    let start = ContinuousClock.now
+
+    do {
+        let user = try await api.get("/users/\(id)")
+        let elapsed = ContinuousClock.now - start
+        Log.network.info("⬇️ fetchUser success — id=\(id.uuidString, privacy: .public) elapsed=\(elapsed)")
+        return user
+    } catch {
+        let elapsed = ContinuousClock.now - start
+        Log.network.error("❌ fetchUser failed — id=\(id.uuidString, privacy: .public) elapsed=\(elapsed) error=\(error.localizedDescription, privacy: .public)")
+        throw error
+    }
+}
+
+// State transitions are always logged
+func handleStateChange(from old: AppState, to new: AppState) {
+    Log.lifecycle.notice("🔄 state transition — from=\(String(describing: old), privacy: .public) to=\(String(describing: new), privacy: .public)")
+}
+```
+
+### Logging Rules
+
+1. **Every public function logs entry and exit** — include parameters and elapsed time
+2. **Errors always log full context** — what was attempted, with what inputs, what failed
+3. **State transitions are always logged** — old state → new state
+4. **Use emoji prefixes** for visual scanning: ⬆️ request, ⬇️ response, ❌ error, 🔄 transition, ✅ success, ⚠️ warning
+5. **Include timing** — `ContinuousClock` for elapsed durations on any I/O or async operation
+6. **Privacy-aware** — use `.public` only for non-sensitive data; defaults to redacted in release
+
+### File Logging for CLI Tools
+
+For command-line tools where OSLog isn't practical, write to a known log file:
+
+```swift
+import Foundation
+
+/// File-based logger for CLI tools.
+/// Writes structured log lines to ~/.local/log/<tool>.log
+actor FileLog {
+    static let shared = FileLog()
+
+    private let logFile: URL
+    private let dateFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private init() {
+        let logDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".local/log")
+        try? FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+
+        let processName = ProcessInfo.processInfo.processName
+        logFile = logDir.appendingPathComponent("\(processName).log")
+    }
+
+    /// Append a structured log line.
+    /// - Parameters:
+    ///   - level: Log severity (debug, info, warn, error)
+    ///   - category: Subsystem category for filtering
+    ///   - message: Human-readable log message
+    func log(_ level: String, category: String, _ message: String) {
+        let timestamp = dateFormatter.string(from: Date())
+        let line = "\(timestamp) [\(level.uppercased())] [\(category)] \(message)\n"
+
+        // Also print to stderr so it doesn't pollute stdout (pipe-friendly)
+        FileHandle.standardError.write(Data(line.utf8))
+
+        // Append to file for tailing
+        if let handle = try? FileHandle(forWritingTo: logFile) {
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            handle.closeFile()
+        } else {
+            try? line.data(using: .utf8)?.write(to: logFile)
+        }
+    }
+}
+
+// Usage
+await FileLog.shared.log("info", category: "network", "⬆️ fetchUser id=\(id)")
+```
+
+## Always Tail Logs During Development
+
+When developing or debugging Swift code, **always run a log tail in a background terminal**. This is non-negotiable — logs are useless if nobody is watching them.
+
+### Tailing OSLog (macOS apps)
+
+```bash
+# Tail all logs from your app's subsystem
+log stream --predicate 'subsystem == "com.yourapp.dev"' --level debug
+
+# Filter to specific category
+log stream --predicate 'subsystem == "com.yourapp.dev" AND category == "network"' --level debug
+
+# With timestamps and process info
+log stream --predicate 'subsystem == "com.yourapp.dev"' --level debug --style compact
+```
+
+### Tailing File Logs (CLI tools)
+
+```bash
+# Tail the log file for a CLI tool
+tail -f ~/.local/log/my-tool.log
+
+# Tail with grep for specific category
+tail -f ~/.local/log/my-tool.log | grep '\[NETWORK\]'
+
+# Tail all tool logs
+tail -f ~/.local/log/*.log
+```
+
+### Development Workflow
+
+1. **Start log tail first** — before running the app or script
+2. **Use `bg_bash`** to run the tail in the background when working in pi:
+   ```
+   bg_bash: log stream --predicate 'subsystem == "com.yourapp.dev"' --level debug
+   ```
+3. **Check `task_output`** periodically to review log output
+4. **Filter aggressively** — use category predicates to reduce noise
+5. **Never ship without reviewing logs** — if the log tail shows unexpected entries, investigate before committing
+
 ## Quick Reference
 
 | Tool | Purpose |
@@ -1119,6 +1289,9 @@ struct ListUsers: AsyncParsableCommand {
 | Concurrency | async/await, actors (not callbacks) |
 | Type safety | Generics, protocols (avoid `Any`) |
 | Architecture | Shared Core for multi-target |
+| macOS imports | `import Cocoa` (not piecemeal) |
+| Logging | OSLog with categories (apps), FileLog (CLI) |
+| Log tailing | Always run `log stream` or `tail -f` during dev |
 
 ## Notes
 
