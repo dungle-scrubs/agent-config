@@ -180,6 +180,10 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			tasks.set(taskId, task);
 			cleanupOldTasks();
 
+			// Spinner frames for streaming indicator
+			const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+			let spinnerIdx = 0;
+
 			// Buffer output (and stream if not fire-and-forget)
 			const onData = (data: Buffer) => {
 				if (task.outputBytes < MAX_OUTPUT_BYTES) {
@@ -196,9 +200,11 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 				if (!fireAndForget) {
 					const output = task.output.join("");
 					const duration = formatDuration(Date.now() - task.startTime);
+					const spinner = spinnerFrames[spinnerIdx % spinnerFrames.length];
+					spinnerIdx++;
 					onUpdate?.({
 						content: [{ type: "text", text: output || "(no output yet)" }],
-						details: { taskId, command: params.command, status: "running", duration, output },
+						details: { taskId, command: params.command, status: "running", duration, output, spinner },
 					});
 				}
 			};
@@ -314,6 +320,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 				exitCode?: number | null;
 				output?: string;
 				fireAndForget?: boolean;
+				spinner?: string;
 			} | undefined;
 
 			// Fire-and-forget: compact one-liner
@@ -343,8 +350,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			// Status footer
 			if (isPartial) {
+				const spinner = details?.spinner ?? "⠋";
 				if (text) text += "\n";
-				text += theme.fg("warning", `Running... (${duration})`);
+				text += theme.fg("warning", `${spinner} Running... (${duration})`);
 			} else if (status === "completed") {
 				if (truncated) {
 					if (text) text += "\n";
@@ -358,7 +366,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			if (text === "") {
 				text = isPartial
-					? theme.fg("warning", `Running... (${duration})`)
+					? theme.fg("warning", `${details?.spinner ?? "⠋"} Running... (${duration})`)
 					: theme.fg("dim", "(no output)");
 			}
 
