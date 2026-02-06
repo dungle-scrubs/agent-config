@@ -7,7 +7,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "~/.pi/agent/extensions/hooks/tool-call.sh",
+						"command": "~/.pi/agent/extensions/hooks/tool-call/tool-call.sh",
 						"timeout": 5
 					}
 				]
