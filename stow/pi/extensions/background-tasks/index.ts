@@ -318,6 +318,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		},
 
 		renderResult(result, { expanded }, theme) {
+			const COLLAPSED_LINES = 10;
+			const EXPANDED_LINES = 50;
+
 			const details = result.details as {
 				taskId?: string;
 				command?: string;
@@ -338,7 +341,6 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			const status = details?.status ?? "unknown";
 			const duration = details?.duration ?? "";
-			const outputLines = details?.outputLines ?? 0;
 
 			// Status icon
 			let icon: string;
@@ -357,24 +359,28 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 					statusColor = "error";
 			}
 
-			// Compact summary (default view)
+			// Header line
 			let text = theme.fg(statusColor, `${icon} ${status}`) + theme.fg("muted", ` (${duration})`);
-			text += theme.fg("dim", ` ${outputLines} lines`);
 
-			if (!expanded) {
-				text += ` ${keyHint("expandTools", "to expand")}`;
-			}
+			// Show output tail (always — collapsed=10 lines, expanded=50)
+			if (details?.output) {
+				const allLines = details.output.split("\n").filter((l) => l.length > 0);
+				const maxLines = expanded ? EXPANDED_LINES : COLLAPSED_LINES;
+				const truncated = allLines.length > maxLines;
+				const tail = truncated ? allLines.slice(-maxLines) : allLines;
 
-			// Expanded: show last 20 lines of output
-			if (expanded && details?.output) {
-				const lines = details.output.split("\n");
-				const tail = lines.slice(-20);
-				if (lines.length > 20) {
-					text += `\n${theme.fg("dim", `... (${lines.length - 20} lines above)`)}`;
+				if (truncated) {
+					text += `\n${theme.fg("dim", `  ... ${allLines.length - maxLines} more lines above`)}`;
 				}
 				for (const line of tail) {
-					text += `\n${theme.fg("dim", line)}`;
+					text += `\n${theme.fg("dim", `  ${line}`)}`;
 				}
+
+				if (!expanded && truncated) {
+					text += `\n${keyHint("expandTools", "to show more")}`;
+				}
+			} else {
+				text += theme.fg("dim", " (no output yet)");
 			}
 
 			return new Text(text, 0, 0);
