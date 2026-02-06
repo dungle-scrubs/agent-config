@@ -27,3 +27,9 @@ stow/pi/agent/auth.json
 stow/shared/agents/agents
 stow/shared/commands/commands
 stow/shared/skills/skills
+
+# Pi auto-generated extension/theme descriptions
+stow/pi/extensions/*.md
+stow/pi/extensions/*/README.md
+stow/pi/extensions/hooks/tool_call.md
+stow/pi/themes/*.md

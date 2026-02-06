@@ -16,8 +16,21 @@
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
-import { keyHint, type ExtensionAPI, type ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Container, Key, Loader, matchesKey, Text, truncateToWidth, type TUI, visibleWidth } from "@mariozechner/pi-tui";
+import {
+	keyHint,
+	type ExtensionAPI,
+	type ExtensionContext,
+} from "@mariozechner/pi-coding-agent";
+import {
+	Container,
+	Key,
+	Loader,
+	matchesKey,
+	Text,
+	truncateToWidth,
+	type TUI,
+	visibleWidth,
+} from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
 // ANSI escape codes for Catppuccin Macchiato colors (medium-dark variant)
@@ -144,7 +157,10 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		}
 
 		// Status bar only - widget is rendered by tasks extension
-		ctx.ui.setStatus("bg-tasks", `${FG_PURPLE}⚙ ${running.length} bg${RESET_ALL}`);
+		ctx.ui.setStatus(
+			"bg-tasks",
+			`${FG_PURPLE}⚙ ${running.length} bg${RESET_ALL}`,
+		);
 	}
 
 	// Tool: Run bash in background
@@ -154,9 +170,20 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		description:
 			"Run a bash command in the background. By default, streams live output and waits for completion. Set background=true for fire-and-forget daemons/servers.\n\nWHEN TO USE:\n- Starting daemons or servers (with background: true)\n- Long-running builds or tests (default: streams output)\n- Any process you want to run independently\n\nWARNING: Never use bash tool with & to background processes - it will hang. Use bg_bash instead.",
 		parameters: Type.Object({
-			command: Type.String({ description: "Bash command to run in background" }),
-			timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, default: no timeout)" })),
-			background: Type.Optional(Type.Boolean({ description: "If true, return immediately without streaming output. Use for daemons/servers." })),
+			command: Type.String({
+				description: "Bash command to run in background",
+			}),
+			timeout: Type.Optional(
+				Type.Number({
+					description: "Timeout in seconds (optional, default: no timeout)",
+				}),
+			),
+			background: Type.Optional(
+				Type.Boolean({
+					description:
+						"If true, return immediately without streaming output. Use for daemons/servers.",
+				}),
+			),
 		}),
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			const taskId = generateTaskId();
@@ -194,7 +221,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 					task.outputBytes += data.length;
 
 					if (task.outputBytes >= MAX_OUTPUT_BYTES) {
-						task.output.push("\n[Output truncated - max buffer size reached]\n");
+						task.output.push(
+							"\n[Output truncated - max buffer size reached]\n",
+						);
 					}
 				}
 
@@ -256,7 +285,10 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			// Streaming mode: wait for process to complete
 			updateWidget(ctx);
 
-			const result = await new Promise<{ exitCode: number | null; error?: string }>((resolve) => {
+			const result = await new Promise<{
+				exitCode: number | null;
+				error?: string;
+			}>((resolve) => {
 				child.on("close", (code) => {
 					task.endTime = Date.now();
 					task.exitCode = code;
@@ -295,10 +327,19 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			}
 
 			const output = task.output.join("");
-			const duration = formatDuration((task.endTime || Date.now()) - task.startTime);
+			const duration = formatDuration(
+				(task.endTime || Date.now()) - task.startTime,
+			);
 
 			return {
-				details: { taskId, command: params.command, status: task.status, duration, exitCode: result.exitCode, output },
+				details: {
+					taskId,
+					command: params.command,
+					status: task.status,
+					duration,
+					exitCode: result.exitCode,
+					output,
+				},
 				content: [
 					{
 						type: "text",
@@ -311,11 +352,19 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		renderCall(args, theme) {
 			const cmd = truncateCommand(args.command as string, 60);
 			const bg = args.background ? theme.fg("dim", " (detached)") : "";
-			return new Text(theme.fg("toolTitle", theme.bold("bg_bash ")) + theme.fg("muted", cmd) + bg, 0, 0);
+			return new Text(
+				theme.fg("toolTitle", theme.bold("bg_bash ")) +
+					theme.fg("muted", cmd) +
+					bg,
+				0,
+				0,
+			);
 		},
 
 		renderResult(result, { expanded, isPartial }, theme) {
-			const details = result.details as { fireAndForget?: boolean; taskId?: string } | undefined;
+			const details = result.details as
+				| { fireAndForget?: boolean; taskId?: string }
+				| undefined;
 
 			// Fire-and-forget: compact one-liner
 			if (details?.fireAndForget) {
@@ -334,14 +383,20 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 				const container = new Container();
 
 				if (output) {
-					const allLines = output.split("\n").filter((l: string) => l.length > 0);
+					const allLines = output
+						.split("\n")
+						.filter((l: string) => l.length > 0);
 					const maxLines = COLLAPSED_LINES;
 					const truncated = allLines.length > maxLines;
 					const tail = truncated ? allLines.slice(-maxLines) : allLines;
 
 					let rendered = "";
 					if (truncated) {
-						rendered += theme.fg("dim", `... ${allLines.length - maxLines} more lines above`) + "\n";
+						rendered +=
+							theme.fg(
+								"dim",
+								`... ${allLines.length - maxLines} more lines above`,
+							) + "\n";
 					}
 					for (let i = 0; i < tail.length; i++) {
 						rendered += theme.fg("muted", tail[i]);
@@ -366,7 +421,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 				if (loader) {
 					container.addChild(loader);
 				} else {
-					container.addChild(new Text(theme.fg("bashMode", "Running..."), 0, 0));
+					container.addChild(
+						new Text(theme.fg("bashMode", "Running..."), 0, 0),
+					);
 				}
 
 				return container;
@@ -382,7 +439,11 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			let rendered = "";
 			if (truncated) {
-				rendered += theme.fg("dim", `... ${allLines.length - maxLines} more lines above`) + "\n";
+				rendered +=
+					theme.fg(
+						"dim",
+						`... ${allLines.length - maxLines} more lines above`,
+					) + "\n";
 			}
 			for (let i = 0; i < tail.length; i++) {
 				rendered += theme.fg("toolOutput", tail[i]);
@@ -404,7 +465,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			"Retrieve the output from a background task. Can be called while task is still running to get partial output.",
 		parameters: Type.Object({
 			taskId: Type.String({ description: "Task ID returned by bg_bash" }),
-			tail: Type.Optional(Type.Number({ description: "Only return last N lines (optional)" })),
+			tail: Type.Optional(
+				Type.Number({ description: "Only return last N lines (optional)" }),
+			),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const task = tasks.get(params.taskId);
@@ -428,7 +491,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 				output = lines.slice(-params.tail).join("\n");
 			}
 
-			const duration = formatDuration((task.endTime || Date.now()) - task.startTime);
+			const duration = formatDuration(
+				(task.endTime || Date.now()) - task.startTime,
+			);
 			const statusLine =
 				task.status === "running"
 					? `Status: running (${duration})`
@@ -458,7 +523,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			const taskId = args.taskId as string;
 			const task = tasks.get(taskId);
 			const cmd = task ? truncateCommand(task.command, 40) : "";
-			let text = theme.fg("toolTitle", theme.bold("task_output ")) + theme.fg("accent", taskId);
+			let text =
+				theme.fg("toolTitle", theme.bold("task_output ")) +
+				theme.fg("accent", taskId);
 			if (cmd) text += theme.fg("dim", ` ${cmd}`);
 			return new Text(text, 0, 0);
 		},
@@ -467,22 +534,28 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			const COLLAPSED_LINES = 10;
 			const EXPANDED_LINES = 50;
 
-			const details = result.details as {
-				taskId?: string;
-				command?: string;
-				status?: string;
-				exitCode?: number | null;
-				duration?: string;
-				outputLines?: number;
-				outputBytes?: number;
-				output?: string;
-				error?: boolean;
-			} | undefined;
+			const details = result.details as
+				| {
+						taskId?: string;
+						command?: string;
+						status?: string;
+						exitCode?: number | null;
+						duration?: string;
+						outputLines?: number;
+						outputBytes?: number;
+						output?: string;
+						error?: boolean;
+				  }
+				| undefined;
 
 			// Error case — show full text
 			if (details?.error) {
 				const text = result.content[0];
-				return new Text(theme.fg("error", text?.type === "text" ? text.text : "Error"), 0, 0);
+				return new Text(
+					theme.fg("error", text?.type === "text" ? text.text : "Error"),
+					0,
+					0,
+				);
 			}
 
 			const status = details?.status ?? "unknown";
@@ -506,7 +579,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			}
 
 			// Header line
-			let text = theme.fg(statusColor, `${icon} ${status}`) + theme.fg("muted", ` (${duration})`);
+			let text =
+				theme.fg(statusColor, `${icon} ${status}`) +
+				theme.fg("muted", ` (${duration})`);
 
 			// Show output tail (always — collapsed=10 lines, expanded=50)
 			if (details?.output) {
@@ -537,7 +612,8 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "task_status",
 		label: "Task Status",
-		description: "Check if a background task is still running or has completed.",
+		description:
+			"Check if a background task is still running or has completed.",
 		parameters: Type.Object({
 			taskId: Type.String({ description: "Task ID returned by bg_bash" }),
 		}),
@@ -556,10 +632,17 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 				};
 			}
 
-			const duration = formatDuration((task.endTime || Date.now()) - task.startTime);
+			const duration = formatDuration(
+				(task.endTime || Date.now()) - task.startTime,
+			);
 
 			return {
-				details: { taskId: task.id, status: task.status, exitCode: task.exitCode, duration },
+				details: {
+					taskId: task.id,
+					status: task.status,
+					exitCode: task.exitCode,
+					duration,
+				},
 				content: [
 					{
 						type: "text",
@@ -573,7 +656,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 								outputBytes: task.outputBytes,
 							},
 							null,
-							2
+							2,
 						),
 					},
 				],
@@ -581,20 +664,42 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		},
 
 		renderCall(args, theme) {
-			return new Text(theme.fg("toolTitle", theme.bold("task_status ")) + theme.fg("accent", args.taskId as string), 0, 0);
+			return new Text(
+				theme.fg("toolTitle", theme.bold("task_status ")) +
+					theme.fg("accent", args.taskId as string),
+				0,
+				0,
+			);
 		},
 
 		renderResult(result, _options, theme) {
-			const details = result.details as { status?: string; duration?: string; error?: boolean } | undefined;
+			const details = result.details as
+				| { status?: string; duration?: string; error?: boolean }
+				| undefined;
 			if (details?.error) {
 				const text = result.content[0];
-				return new Text(theme.fg("error", text?.type === "text" ? text.text : "Not found"), 0, 0);
+				return new Text(
+					theme.fg("error", text?.type === "text" ? text.text : "Not found"),
+					0,
+					0,
+				);
 			}
 			const status = details?.status ?? "unknown";
 			const duration = details?.duration ?? "";
-			const icon = status === "running" ? "●" : status === "completed" ? "✓" : "✗";
-			const color: "success" | "accent" | "error" = status === "completed" ? "success" : status === "running" ? "accent" : "error";
-			return new Text(theme.fg(color, `${icon} ${status}`) + theme.fg("muted", ` (${duration})`), 0, 0);
+			const icon =
+				status === "running" ? "●" : status === "completed" ? "✓" : "✗";
+			const color: "success" | "accent" | "error" =
+				status === "completed"
+					? "success"
+					: status === "running"
+						? "accent"
+						: "error";
+			return new Text(
+				theme.fg(color, `${icon} ${status}`) +
+					theme.fg("muted", ` (${duration})`),
+				0,
+				0,
+			);
 		},
 	});
 
@@ -619,7 +724,12 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			if (task.status !== "running" || !task.process) {
 				return {
 					details: { error: true },
-					content: [{ type: "text", text: `Task ${params.taskId} is not running (status: ${task.status})` }],
+					content: [
+						{
+							type: "text",
+							text: `Task ${params.taskId} is not running (status: ${task.status})`,
+						},
+					],
 				};
 			}
 
@@ -637,14 +747,25 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		},
 
 		renderCall(args, theme) {
-			return new Text(theme.fg("toolTitle", theme.bold("task_kill ")) + theme.fg("error", args.taskId as string), 0, 0);
+			return new Text(
+				theme.fg("toolTitle", theme.bold("task_kill ")) +
+					theme.fg("error", args.taskId as string),
+				0,
+				0,
+			);
 		},
 
 		renderResult(result, _options, theme) {
-			const details = result.details as { killed?: boolean; error?: boolean } | undefined;
+			const details = result.details as
+				| { killed?: boolean; error?: boolean }
+				| undefined;
 			if (details?.error) {
 				const text = result.content[0];
-				return new Text(theme.fg("error", text?.type === "text" ? text.text : "Error"), 0, 0);
+				return new Text(
+					theme.fg("error", text?.type === "text" ? text.text : "Error"),
+					0,
+					0,
+				);
 			}
 			return new Text(theme.fg("warning", "✗ Killed"), 0, 0);
 		},
@@ -678,7 +799,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			}
 
 			if (subcommand === "clear") {
-				const completed = [...tasks.entries()].filter(([_, t]) => t.status !== "running");
+				const completed = [...tasks.entries()].filter(
+					([_, t]) => t.status !== "running",
+				);
 				for (const [id] of completed) {
 					tasks.delete(id);
 				}
@@ -693,7 +816,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 					"No background tasks.\n\n" +
 						"To run a command in background, ask the agent to use bg_bash,\n" +
 						"or say 'run [command] in the background'.",
-					"info"
+					"info",
 				);
 				return;
 			}
@@ -778,7 +901,11 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 						}
 					} else if (mode === "output") {
 						// Output view navigation
-						if (matchesKey(data, Key.escape) || matchesKey(data, "q") || matchesKey(data, Key.left)) {
+						if (
+							matchesKey(data, Key.escape) ||
+							matchesKey(data, "q") ||
+							matchesKey(data, Key.left)
+						) {
 							mode = "list";
 							selectedTaskId = null;
 							refresh();
@@ -840,7 +967,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 					if (mode === "list") {
 						// Header - light blue on dark blue bg
 						rawLines.push(
-							`${FG_PURPLE_MUTED}${theme.bold(" Background Tasks")} (${taskList.length})${RESET_ALL}${BG_DARK_GRAY}${FG_WHITE}`
+							`${FG_PURPLE_MUTED}${theme.bold(" Background Tasks")} (${taskList.length})${RESET_ALL}${BG_DARK_GRAY}${FG_WHITE}`,
 						);
 						rawLines.push("");
 
@@ -848,7 +975,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 						for (let i = 0; i < taskList.length; i++) {
 							const task = taskList[i];
 							const isSelected = i === selectedIndex;
-							const duration = formatDuration((task.endTime || Date.now()) - task.startTime);
+							const duration = formatDuration(
+								(task.endTime || Date.now()) - task.startTime,
+							);
 
 							let statusIcon: string;
 							let iconColor: string;
@@ -870,20 +999,26 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 									iconColor = FG_LIGHT_RED;
 							}
 
-							const prefix = isSelected ? `${FG_PURPLE} > ${RESET_ALL}${BG_DARK_GRAY}${FG_WHITE}` : "   ";
+							const prefix = isSelected
+								? `${FG_PURPLE} > ${RESET_ALL}${BG_DARK_GRAY}${FG_WHITE}`
+								: "   ";
 							const icon = `${iconColor}${statusIcon}${RESET_ALL}${BG_DARK_GRAY}${FG_WHITE}`;
 							const cmd = truncateCommand(task.command, width - 30);
 							const info = ` [${task.status}, ${duration}]`;
 
 							if (isSelected) {
-								rawLines.push(`${prefix + icon} ${FG_PURPLE}${cmd}${RESET_ALL}${BG_DARK_GRAY}${FG_WHITE}${info}`);
+								rawLines.push(
+									`${prefix + icon} ${FG_PURPLE}${cmd}${RESET_ALL}${BG_DARK_GRAY}${FG_WHITE}${info}`,
+								);
 							} else {
 								rawLines.push(`${prefix + icon} ${cmd}${info}`);
 							}
 						}
 
 						rawLines.push("");
-						rawLines.push(" ↑↓ navigate • Enter view output • k kill • q close");
+						rawLines.push(
+							" ↑↓ navigate • Enter view output • k kill • q close",
+						);
 					} else if (mode === "output" && selectedTaskId) {
 						const task = tasks.get(selectedTaskId);
 						if (!task) {
@@ -891,7 +1026,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 							return render(width);
 						}
 
-						const duration = formatDuration((task.endTime || Date.now()) - task.startTime);
+						const duration = formatDuration(
+							(task.endTime || Date.now()) - task.startTime,
+						);
 						let statusText: string;
 						switch (task.status) {
 							case "running":
@@ -909,7 +1046,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 						// Header - light blue on dark blue
 						rawLines.push(
-							`${FG_PURPLE}${theme.bold(" Task Output")}${RESET_ALL}${BG_DARK_GRAY}${FG_WHITE}  ${statusText} (${duration})`
+							`${FG_PURPLE}${theme.bold(" Task Output")}${RESET_ALL}${BG_DARK_GRAY}${FG_WHITE}  ${statusText} (${duration})`,
 						);
 						rawLines.push(` ${truncateCommand(task.command, width - 4)}`);
 						rawLines.push("");
@@ -922,7 +1059,10 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 						const maxScroll = Math.max(0, outputLines.length - (height - 8));
 						scrollOffset = Math.min(scrollOffset, maxScroll);
 
-						const visibleLines = outputLines.slice(scrollOffset, scrollOffset + height - 8);
+						const visibleLines = outputLines.slice(
+							scrollOffset,
+							scrollOffset + height - 8,
+						);
 
 						if (visibleLines.length === 0) {
 							rawLines.push(" (no output yet)");
@@ -937,13 +1077,15 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 							const scrollPct = Math.round((scrollOffset / maxScroll) * 100);
 							rawLines.push("");
 							rawLines.push(
-								` [${scrollOffset + 1}-${Math.min(scrollOffset + height - 8, outputLines.length)}/${outputLines.length}] ${scrollPct}%`
+								` [${scrollOffset + 1}-${Math.min(scrollOffset + height - 8, outputLines.length)}/${outputLines.length}] ${scrollPct}%`,
 							);
 						}
 
 						rawLines.push("");
 						const killHint = task.status === "running" ? " • k kill" : "";
-						rawLines.push(` Esc/q back • ↑↓ scroll • g/G top/bottom${killHint}`);
+						rawLines.push(
+							` Esc/q back • ↑↓ scroll • g/G top/bottom${killHint}`,
+						);
 					}
 
 					// Apply dark blue background to all lines
@@ -992,7 +1134,8 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 	// Register Ctrl+Shift+B shortcut for background tasks
 	// Note: only works when TUI is idle, not during tool execution
 	pi.registerShortcut(Key.ctrlShift("b"), {
-		description: "Show background tasks (Note: use bg_bash tool to run commands in background)",
+		description:
+			"Show background tasks (Note: use bg_bash tool to run commands in background)",
 		handler: async (ctx) => {
 			const running = [...tasks.values()].filter((t) => t.status === "running");
 
@@ -1001,7 +1144,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 					"No background tasks running.\n\n" +
 						"To run a command in background, ask the agent to use the bg_bash tool,\n" +
 						"or say 'run [command] in the background'.",
-					"info"
+					"info",
 				);
 			} else {
 				const lines = running.map((t) => {
@@ -1026,13 +1169,14 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		// - Not preceded by another & (that would be &&)
 		// - Not followed by > (that would be &> redirect)
 		// - Followed by: end of string, whitespace+newline, semicolon, ), or space+word
-		
+
 		// Pattern: single & followed by end, newline, semicolon, paren, or space+word
 		// (?<!&) = not preceded by &
 		// (?!>) = not followed by > (excludes &>)
 		// (?!&) = not followed by & (excludes &&)
-		const backgroundPattern = /(?<!&)&(?!>)(?!&)(\s*$|\s*\n|\s*;|\s*\)|\s+[a-zA-Z])/;
-		
+		const backgroundPattern =
+			/(?<!&)&(?!>)(?!&)(\s*$|\s*\n|\s*;|\s*\)|\s+[a-zA-Z])/;
+
 		const hasBackgroundAmpersand = backgroundPattern.test(command);
 
 		// Exclude if & only appears inside heredocs
@@ -1053,11 +1197,13 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		const hangPatterns: Array<{ pattern: RegExp; reason: string }> = [
 			{
 				pattern: /docker exec[^|]*node -e/,
-				reason: "docker exec with inline node script may hang if connections aren't closed",
+				reason:
+					"docker exec with inline node script may hang if connections aren't closed",
 			},
 			{
 				pattern: /docker exec[^|]*python -c/,
-				reason: "docker exec with inline python script may hang if connections aren't closed",
+				reason:
+					"docker exec with inline python script may hang if connections aren't closed",
 			},
 			{
 				pattern: /docker exec[^|]*-it\s/,

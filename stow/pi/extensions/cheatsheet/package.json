@@ -1,6 +1,0 @@
-{
-	"name": "cheatsheet",
-	"version": "1.0.0",
-	"description": "Keyboard shortcuts cheatsheet overlay",
-	"main": "index.ts"
-}
