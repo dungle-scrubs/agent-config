@@ -348,7 +348,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			// Fire-and-forget: compact one-liner
 			if (details?.fireAndForget) {
-				return new Text(theme.fg("success", `⚙ Started (detached)`), 0, 0);
+				return new Text(theme.fg("success", "⚙ Started (detached)"), 0, 0);
 			}
 
 			const COLLAPSED_LINES = 10;
@@ -868,7 +868,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 							return true;
 						}
 						if (data === "G") {
-							scrollOffset = 99999; // Will be clamped in render
+							scrollOffset = 99_999; // Will be clamped in render
 							refresh();
 							return true;
 						}

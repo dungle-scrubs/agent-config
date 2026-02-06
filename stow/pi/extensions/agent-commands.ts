@@ -90,7 +90,7 @@ function loadAgentsFromDir(dir: string): Agent[] {
 		}
 
 		const { frontmatter, body } = parseAgent(content);
-		if (!frontmatter.name || !frontmatter.description) continue;
+		if (!(frontmatter.name && frontmatter.description)) continue;
 
 		const tools =
 			typeof frontmatter.tools === "string"
@@ -166,7 +166,7 @@ export default function (pi: ExtensionAPI) {
 		pi.registerCommand(agent.name, {
 			description: `[agent] ${agent.description}`,
 			handler: async (args, ctx) => {
-				if (!args || !args.trim()) {
+				if (!args?.trim()) {
 					ctx.ui.notify(`Usage: /${agent.name} <task>`, "warning");
 					return;
 				}

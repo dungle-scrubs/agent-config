@@ -50,7 +50,7 @@ async function checkToolProxyStatus(): Promise<{ state: ProxyState; stale: boole
 			const content = fs.readFileSync(STATE_FILE, "utf-8");
 			const data: StateFile = JSON.parse(content);
 			const ageMs = Date.now() - data.timestamp;
-			const stale = ageMs > 30000; // Stale if older than 30s
+			const stale = ageMs > 30_000; // Stale if older than 30s
 			return { state: data.state, stale };
 		}
 	} catch {
@@ -69,9 +69,8 @@ async function checkToolProxyStatus(): Promise<{ state: ProxyState; stale: boole
 
 		if (response.ok) {
 			return { state: "connected", stale: false };
-		} else {
-			return { state: "error", stale: false };
 		}
+		return { state: "error", stale: false };
 	} catch (err: any) {
 		if (err.name === "AbortError") {
 			return { state: "connecting", stale: false };
@@ -126,7 +125,7 @@ export default function toolProxyStatus(pi: ExtensionAPI): void {
 
 		// Check every 10 seconds
 		if (G.__piToolProxyStatusInterval) clearInterval(G.__piToolProxyStatusInterval);
-		G.__piToolProxyStatusInterval = setInterval(() => updateStatus(ctx), 10000);
+		G.__piToolProxyStatusInterval = setInterval(() => updateStatus(ctx), 10_000);
 	});
 
 	pi.on("session_shutdown", async () => {

@@ -235,7 +235,7 @@ async function getOrCreateConnection(language: string, rootPath: string): Promis
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 
-	if (!serverProcess.stdout || !serverProcess.stdin) {
+	if (!(serverProcess.stdout && serverProcess.stdin)) {
 		serverProcess.kill();
 		return null;
 	}
@@ -389,14 +389,12 @@ function formatSymbols(symbols: (SymbolInformation | DocumentSymbol | WorkspaceS
 				const loc = s.location as Location | { uri: string };
 				if ("range" in loc) {
 					return `${s.name} (${symbolKindToString(s.kind)}) - ${formatLocation(loc)}`;
-				} else {
-					// WorkspaceSymbol with just uri (no range)
-					return `${s.name} (${symbolKindToString(s.kind)}) - ${uriToFilePath(loc.uri)}`;
 				}
-			} else {
-				// DocumentSymbol
-				return `${s.name} (${symbolKindToString(s.kind)}) - line ${s.range.start.line + 1}`;
+				// WorkspaceSymbol with just uri (no range)
+				return `${s.name} (${symbolKindToString(s.kind)}) - ${uriToFilePath(loc.uri)}`;
 			}
+			// DocumentSymbol
+			return `${s.name} (${symbolKindToString(s.kind)}) - line ${s.range.start.line + 1}`;
 		})
 		.join("\n");
 }
@@ -847,11 +845,11 @@ WHEN TO USE:
 					} else {
 						lines.push(`${lang}: ✗ not installed`);
 						if (lang === "python") {
-							lines.push(`  Install: uvx ty (recommended) or npm i -g pyright`);
+							lines.push("  Install: uvx ty (recommended) or npm i -g pyright");
 						} else if (lang === "rust") {
-							lines.push(`  Install: rustup component add rust-analyzer`);
+							lines.push("  Install: rustup component add rust-analyzer");
 						} else if (lang === "swift") {
-							lines.push(`  Install: Comes with Xcode (xcode-select --install)`);
+							lines.push("  Install: Comes with Xcode (xcode-select --install)");
 						} else {
 							lines.push(`  Install: npm i -g ${config.command}`);
 						}

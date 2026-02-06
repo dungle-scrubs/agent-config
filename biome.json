@@ -1,32 +1,43 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.3.13/schema.json",
+	"extends": ["./node_modules/ultracite/config/biome/core/biome.jsonc"],
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
 		"useIgnoreFile": true
 	},
-	"assist": { "actions": { "source": { "organizeImports": "on" } } },
 	"formatter": {
-		"enabled": true,
 		"indentStyle": "tab",
 		"indentWidth": 2,
 		"lineWidth": 120
 	},
 	"linter": {
-		"enabled": true,
 		"rules": {
-			"recommended": true,
 			"complexity": {
-				"noForEach": "off"
+				"noForEach": "off",
+				"noExcessiveCognitiveComplexity": "off"
 			},
 			"style": {
-				"noNonNullAssertion": "error"
+				"noNonNullAssertion": "error",
+				"noNestedTernary": "off",
+				"noParameterAssign": "off",
+				"useFilenamingConvention": "off",
+				"useBlockStatements": "off"
 			},
 			"suspicious": {
-				"noExplicitAny": "off",
-				"noImplicitAnyLet": "off",
-				"noAssignInExpressions": "off",
-				"noControlCharactersInRegex": "off"
+				"noControlCharactersInRegex": "off",
+				"noExplicitAny": "warn",
+				"noImplicitAnyLet": "warn",
+				"noAssignInExpressions": "warn",
+				"noEmptyBlockStatements": "off",
+				"noEvolvingTypes": "off",
+				"noConsole": "off",
+				"useAwait": "off"
+			},
+			"performance": {
+				"noBarrelFile": "off",
+				"noNamespaceImport": "off",
+				"useTopLevelRegex": "off"
 			}
 		}
 	},
@@ -36,7 +47,38 @@
 			"trailingCommas": "es5"
 		}
 	},
+	"json": {
+		"formatter": {
+			"indentStyle": "tab"
+		}
+	},
 	"files": {
-		"includes": ["stow/pi/extensions/**/*.ts", "stow/shared/**/*.ts", "stow/**/*.json"]
-	}
+		"includes": [
+			"stow/pi/extensions/**/*.ts",
+			"stow/shared/**/*.ts",
+			"stow/**/*.json"
+		]
+	},
+	"overrides": [
+		{
+			"includes": ["**/*.d.ts"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noExplicitAny": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["**/__tests__/**/*", "**/*.test.ts", "tests/**/*"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noExplicitAny": "off"
+					}
+				}
+			}
+		}
+	]
 }

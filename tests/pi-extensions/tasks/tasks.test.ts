@@ -255,10 +255,10 @@ describe("tasks core", () => {
 
 			// Monkey-patch to detect intermediate empty state
 			Object.defineProperty(state, "tasks", {
-				get: function () {
+				get() {
 					return this._tasks;
 				},
-				set: function (value) {
+				set(value) {
 					if (Array.isArray(value) && value.length === 0 && this._tasks && this._tasks.length > 0) {
 						sawEmptyState = true;
 					}
@@ -476,7 +476,7 @@ describe("tasks core", () => {
 
 			// Restore
 			if (originalEnv === undefined) {
-				delete process.env.PI_IS_SUBAGENT;
+				process.env.PI_IS_SUBAGENT = undefined;
 			} else {
 				process.env.PI_IS_SUBAGENT = originalEnv;
 			}
@@ -484,7 +484,7 @@ describe("tasks core", () => {
 
 		it("should not skip in main Pi process", () => {
 			const originalEnv = process.env.PI_IS_SUBAGENT;
-			delete process.env.PI_IS_SUBAGENT;
+			process.env.PI_IS_SUBAGENT = undefined;
 
 			const shouldSkip = process.env.PI_IS_SUBAGENT === "1";
 			expect(shouldSkip).toBe(false);
@@ -617,7 +617,7 @@ describe("tasks core", () => {
 			addTasksBatch(state, ["Task 1"]);
 
 			const earlyStart = Date.now() - 5000; // 5 seconds ago
-			const lateStart = Date.now() - 30000; // 30 seconds ago
+			const lateStart = Date.now() - 30_000; // 30 seconds ago
 
 			const bgEarly: BackgroundSubagent[] = [
 				{ id: "bg_1", agent: "worker", task: "Test", startTime: earlyStart, status: "running" },

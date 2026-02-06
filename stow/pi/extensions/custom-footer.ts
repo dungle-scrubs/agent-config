@@ -121,10 +121,10 @@ const MIN_WIDE_WIDTH = 100;
  */
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
-	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
-	if (count < 1000000) return `${Math.round(count / 1000)}k`;
-	if (count < 10000000) return `${(count / 1000000).toFixed(1)}M`;
-	return `${Math.round(count / 1000000)}M`;
+	if (count < 10_000) return `${(count / 1000).toFixed(1)}k`;
+	if (count < 1_000_000) return `${Math.round(count / 1000)}k`;
+	if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+	return `${Math.round(count / 1_000_000)}M`;
 }
 
 /**
@@ -235,7 +235,7 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 						const parts: string[] = [];
 						// Worktree badge (teal bg, dark text) - to the left of branch
 						if (gitState.isWorktree) {
-							parts.push(`\x1b[48;2;94;234;212m\x1b[38;2;19;78;74m worktree \x1b[0m`);
+							parts.push("\x1b[48;2;94;234;212m\x1b[38;2;19;78;74m worktree \x1b[0m");
 						}
 						// Branch icon and name (teal)
 						parts.push(`\x1b[38;2;139;213;202m ${gitState.branch}\x1b[0m`);
@@ -303,15 +303,14 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 							width
 						);
 						return [line1, line2];
-					} else {
-						// 4-line stacked layout
-						return [
-							theme.fg("dim", truncateToWidth(pwd, width, "...")),
-							theme.fg("accent", gitBranch || "(no branch)"),
-							theme.fg("dim", truncateToWidth(statsAndStatus, width, "...")),
-							theme.fg("dim", truncateToWidth(modelStr, width, "...")),
-						];
 					}
+					// 4-line stacked layout
+					return [
+						theme.fg("dim", truncateToWidth(pwd, width, "...")),
+						theme.fg("accent", gitBranch || "(no branch)"),
+						theme.fg("dim", truncateToWidth(statsAndStatus, width, "...")),
+						theme.fg("dim", truncateToWidth(modelStr, width, "...")),
+					];
 				},
 
 				invalidate(): void {

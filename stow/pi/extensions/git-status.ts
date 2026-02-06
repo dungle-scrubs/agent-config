@@ -36,7 +36,7 @@ if (G.__piGitStatusInterval) {
 	clearInterval(G.__piGitStatusInterval);
 	G.__piGitStatusInterval = null;
 }
-let lastCwd: string = "";
+let lastCwd = "";
 let cachedState: GitState | null = null;
 
 /**
@@ -207,7 +207,7 @@ export default function gitStatus(pi: ExtensionAPI): void {
 
 		// Update every 10 seconds
 		if (G.__piGitStatusInterval) clearInterval(G.__piGitStatusInterval);
-		G.__piGitStatusInterval = setInterval(() => updateStatus(ctx), 10000);
+		G.__piGitStatusInterval = setInterval(() => updateStatus(ctx), 10_000);
 	});
 
 	pi.on("session_shutdown", async () => {

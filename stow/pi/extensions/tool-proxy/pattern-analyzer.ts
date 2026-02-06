@@ -113,7 +113,7 @@ function analyzeTraces(traces: IntentTrace[]): AnalysisReport {
 	const timestamps = traces.map((t) => t.timestamp).sort((a, b) => a - b);
 	const dateRange = {
 		start: new Date(timestamps[0]).toISOString().split("T")[0],
-		end: new Date(timestamps[timestamps.length - 1]).toISOString().split("T")[0],
+		end: new Date(timestamps.at(-1) ?? Date.now()).toISOString().split("T")[0],
 	};
 
 	// Tool combo frequency
@@ -333,10 +333,8 @@ export default function patternAnalyzer(pi: ExtensionAPI): void {
 				if (ctx.hasUI) {
 					ctx.ui.notify(`Logs backed up to ${path.basename(backup)} and cleared`, "info");
 				}
-			} else {
-				if (ctx.hasUI) {
-					ctx.ui.notify("No logs to clear", "info");
-				}
+			} else if (ctx.hasUI) {
+				ctx.ui.notify("No logs to clear", "info");
 			}
 		},
 	});

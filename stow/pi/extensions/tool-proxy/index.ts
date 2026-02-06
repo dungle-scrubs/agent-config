@@ -145,11 +145,11 @@ async function closeClient() {
 }
 
 /** Result shape returned by tool-proxy execute_tool calls. */
-type ToolProxyResult = {
+interface ToolProxyResult {
 	content?: Array<{ type: string; text?: string }>;
 	isError?: boolean;
 	[key: string]: unknown;
-};
+}
 
 /**
  * Summarizes docs app results with meaningful context.
@@ -235,11 +235,9 @@ function summarizeResult(text: string, app?: string, tool?: string): { summary: 
 			return { summary: `❌ ${data.error}`, full: text };
 		}
 
-		if (data.result !== undefined) {
-			// Calculator-style result
-			if (typeof data.result === "number" || typeof data.result === "string") {
-				return { summary: `✓ ${data.result}`, full: text };
-			}
+		// Calculator-style result
+		if (data.result !== undefined && (typeof data.result === "number" || typeof data.result === "string")) {
+			return { summary: `✓ ${data.result}`, full: text };
 		}
 
 		// Firecrawl/scrape results

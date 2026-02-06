@@ -3,7 +3,7 @@
  */
 
 import { EventEmitter } from "node:events";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { vi } from "vitest";
 
 type EventHandler = (event: any, ctx: ExtensionContext) => Promise<any> | any;
@@ -88,7 +88,7 @@ export function createMockExtensionAPI(): MockExtensionAPI {
 			if (!handlers.has(event)) {
 				handlers.set(event, []);
 			}
-			handlers.get(event)!.push(handler);
+			handlers.get(event)?.push(handler);
 		}),
 
 		registerTool: vi.fn((tool: any) => {

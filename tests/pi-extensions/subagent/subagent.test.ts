@@ -49,14 +49,14 @@ describe("subagent core", () => {
 	describe("formatDuration", () => {
 		it("should format seconds", () => {
 			expect(formatDuration(5000)).toBe("5s");
-			expect(formatDuration(30000)).toBe("30s");
-			expect(formatDuration(59000)).toBe("59s");
+			expect(formatDuration(30_000)).toBe("30s");
+			expect(formatDuration(59_000)).toBe("59s");
 		});
 
 		it("should format minutes and seconds", () => {
-			expect(formatDuration(60000)).toBe("1m0s");
-			expect(formatDuration(90000)).toBe("1m30s");
-			expect(formatDuration(125000)).toBe("2m5s");
+			expect(formatDuration(60_000)).toBe("1m0s");
+			expect(formatDuration(90_000)).toBe("1m30s");
+			expect(formatDuration(125_000)).toBe("2m5s");
 		});
 	});
 
@@ -180,7 +180,7 @@ describe("subagent core", () => {
 			expect(shouldSkip).toBe(true);
 
 			if (originalEnv === undefined) {
-				delete process.env.PI_IS_SUBAGENT;
+				process.env.PI_IS_SUBAGENT = undefined;
 			} else {
 				process.env.PI_IS_SUBAGENT = originalEnv;
 			}

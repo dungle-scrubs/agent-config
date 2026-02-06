@@ -152,7 +152,7 @@ Internal content.`;
 			// Simulate command handler
 			const handler = (args: string) => {
 				const message = args ? `${skillContent}\n\nContext: ${args}` : skillContent;
-				mockApi.sendUserMessage!(message);
+				mockApi.sendUserMessage?.(message);
 			};
 
 			handler("test context");
@@ -176,7 +176,7 @@ Skill body content.
 			const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
 			expect(fmMatch).not.toBeNull();
 
-			const fm = fmMatch![1];
+			const fm = fmMatch?.[1];
 			expect(fm).toContain("name: test-skill");
 			expect(fm).toContain("description: A test skill");
 			expect(fm).toContain("user-invocable: true");

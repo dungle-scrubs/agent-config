@@ -65,7 +65,7 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 
 	for (const entry of entries) {
 		if (!entry.name.endsWith(".md")) continue;
-		if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+		if (!(entry.isFile() || entry.isSymbolicLink())) continue;
 
 		const filePath = path.join(dir, entry.name);
 		let content: string;
@@ -76,7 +76,7 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 		}
 
 		const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
-		if (!frontmatter.name || !frontmatter.description) continue;
+		if (!(frontmatter.name && frontmatter.description)) continue;
 
 		const tools = frontmatter.tools
 			?.split(",")
@@ -336,9 +336,9 @@ function _completeSubagent(id: string): void {
  */
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
-	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
-	if (count < 1000000) return `${Math.round(count / 1000)}k`;
-	return `${(count / 1000000).toFixed(1)}M`;
+	if (count < 10_000) return `${(count / 1000).toFixed(1)}k`;
+	if (count < 1_000_000) return `${Math.round(count / 1000)}k`;
+	return `${(count / 1_000_000).toFixed(1)}M`;
 }
 
 /**
@@ -1205,7 +1205,7 @@ WHEN NOT TO USE SUBAGENTS:
 					previousOutput = getFinalOutput(result.messages);
 				}
 				return {
-					content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
+					content: [{ type: "text", text: getFinalOutput(results.at(-1)?.messages ?? []) || "(no output)" }],
 					details: makeDetails("chain")(results),
 				};
 			}
@@ -1348,7 +1348,7 @@ WHEN NOT TO USE SUBAGENTS:
 						};
 					}
 					return {
-						content: [{ type: "text", text: `Failed to start background subagent` }],
+						content: [{ type: "text", text: "Failed to start background subagent" }],
 						details: makeDetails("single")([]),
 						isError: true,
 					};

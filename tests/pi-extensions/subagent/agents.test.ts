@@ -157,11 +157,7 @@ Project agent.`;
 		vi.mocked(fs.existsSync).mockImplementation((p) => p === userAgentsDir);
 		vi.mocked(fs.readdirSync).mockImplementation((p) => {
 			if (p === userAgentsDir) {
-				return [
-					createMockDirent("agent.md"),
-					createMockDirent("readme.txt"),
-					createMockDirent("config.json"),
-				] as any;
+				return [createMockDirent("agent.md"), createMockDirent("readme.txt"), createMockDirent("config.json")] as any;
 			}
 			return [];
 		});

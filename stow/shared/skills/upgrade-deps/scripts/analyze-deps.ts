@@ -177,7 +177,7 @@ function getOutdatedPnpm(projectPath: string): OutdatedDep[] {
 }
 
 interface YarnOutdatedData {
-	body?: Array<[string, string, string, string, string, string]>;
+	body?: [string, string, string, string, string, string][];
 }
 
 function getOutdatedYarn(projectPath: string): OutdatedDep[] {

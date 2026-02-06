@@ -366,7 +366,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		const hasRightColumn = hasSubagents || hasBgTasks;
 		const hasTasks = state.tasks.length > 0;
 
-		if (!state.visible || (!hasTasks && !hasRightColumn)) {
+		if (!(state.visible && (hasTasks || hasRightColumn))) {
 			if (lastWidgetContent !== "") {
 				ctx.ui.setWidget("1-tasks", undefined);
 				lastWidgetContent = "";
@@ -574,7 +574,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 				case "complete":
 				case "done": {
-					const num = parseInt(rest, 10);
+					const num = Number.parseInt(rest, 10);
 					if (Number.isNaN(num) || num < 1 || num > state.tasks.length) {
 						ctx.ui.notify(`Usage: /tasks complete <number> (1-${state.tasks.length})`, "error");
 						return;
@@ -592,7 +592,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 				case "start":
 				case "active": {
-					const num = parseInt(rest, 10);
+					const num = Number.parseInt(rest, 10);
 					if (Number.isNaN(num) || num < 1 || num > state.tasks.length) {
 						ctx.ui.notify(`Usage: /tasks start <number> (1-${state.tasks.length})`, "error");
 						return;
@@ -607,7 +607,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 				case "delete":
 				case "remove": {
-					const num = parseInt(rest, 10);
+					const num = Number.parseInt(rest, 10);
 					if (Number.isNaN(num) || num < 1 || num > state.tasks.length) {
 						ctx.ui.notify(`Usage: /tasks delete <number> (1-${state.tasks.length})`, "error");
 						return;
@@ -802,7 +802,7 @@ IMPORTANT RULES:
 					// Single task completion
 					const idx = (params.index || 1) - 1;
 					if (idx < 0 || idx >= state.tasks.length) {
-						return { details: {}, content: [{ type: "text", text: `Invalid task number` }] };
+						return { details: {}, content: [{ type: "text", text: "Invalid task number" }] };
 					}
 					const taskToComplete = state.tasks[idx];
 					updateTaskStatus(taskToComplete.id, "completed");

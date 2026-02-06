@@ -116,10 +116,10 @@ export default function docsGate(pi: ExtensionAPI): void {
 
 		const name = docNameFromUrl(url);
 		const reminder =
-			`\n\n---\n` +
+			"\n\n---\n" +
 			`**Save this documentation locally** so it's cached for future use:\n` +
 			`execute_tool(app: "docs", tool: "add_doc", args: { name: "${name}", url: "${url}" })\n` +
-			`Next time, use docs:search_docs or docs:get_doc instead of web-fetch.`;
+			"Next time, use docs:search_docs or docs:get_doc instead of web-fetch.";
 
 		return {
 			content: [{ type: "text", text: textContent.text + reminder }],

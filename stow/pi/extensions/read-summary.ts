@@ -161,7 +161,7 @@ export default function readSummary(pi: ExtensionAPI): void {
 			if (msg.role !== "toolResult") continue;
 
 			const details = msg.details as Record<string, unknown> | undefined;
-			if (!details?.[SUMMARY_MARKER] || !details._fullText) continue;
+			if (!(details?.[SUMMARY_MARKER] && details._fullText)) continue;
 
 			const textContent = msg.content.find((c): c is { type: "text"; text: string } => c.type === "text");
 			if (textContent) {

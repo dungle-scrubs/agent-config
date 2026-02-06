@@ -65,12 +65,12 @@ function substituteArguments(content: string, args: string): string {
 
 	// Replace $ARGUMENTS[N] or $N with specific arg
 	result = result.replace(/\$ARGUMENTS\[(\d+)\]|\$(\d+)/g, (_, n1, n2) => {
-		const index = parseInt(n1 ?? n2, 10);
+		const index = Number.parseInt(n1 ?? n2, 10);
 		return argList[index] ?? "";
 	});
 
 	// If $ARGUMENTS wasn't in content and args provided, append
-	if (!content.includes("$ARGUMENTS") && !content.includes("$@") && args) {
+	if (!(content.includes("$ARGUMENTS") || content.includes("$@")) && args) {
 		result += `\n\nUser: ${args}`;
 	}
 

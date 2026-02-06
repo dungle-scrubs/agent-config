@@ -93,7 +93,7 @@ You are a reviewer.`;
 			];
 
 			for (const agent of agents) {
-				mockApi.registerCommand!(agent.name, {
+				mockApi.registerCommand?.(agent.name, {
 					description: agent.description,
 					handler: vi.fn(),
 				});
@@ -116,7 +116,7 @@ You are a reviewer.`;
 			vi.mocked(spawn).mockReturnValue(mockProc as any);
 
 			// Simulate spawning an agent
-			const agentName = "planner";
+			const _agentName = "planner";
 			const task = "Create a plan for implementing feature X";
 			const model = "claude-sonnet-4-20250514";
 			const tools = ["read", "bash", "write"];
@@ -199,7 +199,7 @@ Prompt.`;
 			expect(fmMatch).not.toBeNull();
 
 			// Simple YAML array extraction
-			const toolsMatch = fmMatch![1].match(/tools:\n((?:\s+-\s+.+\n?)+)/);
+			const toolsMatch = fmMatch?.[1].match(/tools:\n((?:\s+-\s+.+\n?)+)/);
 			if (toolsMatch) {
 				const tools = toolsMatch[1]
 					.split("\n")
@@ -221,7 +221,7 @@ Prompt.`;
 			const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
 			expect(fmMatch).not.toBeNull();
 
-			const skillsMatch = fmMatch![1].match(/skills:\n((?:\s+-\s+.+\n?)+)/);
+			const skillsMatch = fmMatch?.[1].match(/skills:\n((?:\s+-\s+.+\n?)+)/);
 			if (skillsMatch) {
 				const skills = skillsMatch[1]
 					.split("\n")
