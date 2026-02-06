@@ -17,7 +17,7 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { keyHint, type ExtensionAPI, type ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Key, matchesKey, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { Container, Key, Loader, matchesKey, Text, truncateToWidth, type TUI, visibleWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
 // ANSI escape codes for Catppuccin Macchiato colors (medium-dark variant)
@@ -58,6 +58,9 @@ interface BackgroundTask {
 
 const MAX_OUTPUT_BYTES = 1024 * 1024; // 1MB max buffered output per task
 const MAX_TASKS = 20; // Max concurrent/recent tasks
+
+// TUI reference captured at session_start for Loader in renderResult
+let tuiRef: TUI | null = null;
 
 // Global task registry (exposed via globalThis for tasks extension to read)
 const tasks = new Map<string, BackgroundTask>();
@@ -295,9 +298,60 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			};
 		},
 
-		// No renderCall/renderResult — use pi's default tool rendering.
-		// During streaming (isPartial), this shows the standard orange spinner.
-		// On completion, shows the raw output text.
+		renderCall(args, theme) {
+			const cmd = truncateCommand(args.command as string, 60);
+			const bg = args.background ? theme.fg("dim", " (detached)") : "";
+			return new Text(theme.fg("toolTitle", theme.bold("bg_bash ")) + theme.fg("muted", cmd) + bg, 0, 0);
+		},
+
+		renderResult(result, { expanded, isPartial }, theme) {
+			const details = result.details as { fireAndForget?: boolean } | undefined;
+
+			// Fire-and-forget: compact one-liner
+			if (details?.fireAndForget) {
+				return new Text(theme.fg("success", `⚙ Started (detached)`), 0, 0);
+			}
+
+			// While running: show orange spinner only
+			if (isPartial && tuiRef) {
+				const loader = new Loader(
+					tuiRef,
+					(s) => theme.fg("warning", s),
+					(s) => theme.fg("muted", s),
+					"Running...",
+				);
+				return loader;
+			}
+			if (isPartial) {
+				return new Text(theme.fg("warning", "Running..."), 0, 0);
+			}
+
+			// Completed: show output
+			const text = result.content[0];
+			const output = text?.type === "text" ? text.text : "";
+			if (!output) return new Text(theme.fg("dim", "(no output)"), 0, 0);
+
+			const COLLAPSED_LINES = 10;
+			const EXPANDED_LINES = 50;
+			const allLines = output.split("\n").filter((l: string) => l.length > 0);
+			const maxLines = expanded ? EXPANDED_LINES : COLLAPSED_LINES;
+			const truncated = allLines.length > maxLines;
+			const tail = truncated ? allLines.slice(-maxLines) : allLines;
+
+			let rendered = "";
+			if (truncated) {
+				rendered += theme.fg("dim", `... ${allLines.length - maxLines} more lines above`) + "\n";
+			}
+			for (let i = 0; i < tail.length; i++) {
+				rendered += theme.fg("toolOutput", tail[i]);
+				if (i < tail.length - 1) rendered += "\n";
+			}
+			if (truncated && !expanded) {
+				rendered += `\n${theme.fg("dim", `... ${allLines.length - maxLines} more lines`)} ${keyHint("expandTools", "to expand")}`;
+			}
+
+			return new Text(rendered, 0, 0);
+		},
 	});
 
 	// Tool: Get task output
@@ -879,8 +933,16 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		tasks.clear();
 	});
 
-	// Update status on session start (widget rendering delegated to tasks extension)
+	// Capture TUI reference and update status on session start
 	pi.on("session_start", async (_event, ctx) => {
+		// Capture TUI via a throwaway widget so Loader can be used in renderResult
+		ctx.ui.setWidget("bg-tasks-tui-capture", (tui, _theme) => {
+			tuiRef = tui;
+			return { render: () => [], invalidate: () => {} };
+		});
+		// Immediately remove — we just needed the reference
+		ctx.ui.setWidget("bg-tasks-tui-capture", undefined);
+
 		ctx.ui.setStatus("bg-tasks", undefined);
 		updateWidget(ctx);
 	});
