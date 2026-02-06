@@ -163,8 +163,12 @@ async function runCommandHook(
 		proc.stdin.write(JSON.stringify(eventData));
 		proc.stdin.end();
 
-		proc.stdout.on("data", (d) => (stdout += d.toString()));
-		proc.stderr.on("data", (d) => (stderr += d.toString()));
+		proc.stdout.on("data", (d) => {
+			stdout += d.toString();
+		});
+		proc.stderr.on("data", (d) => {
+			stderr += d.toString();
+		});
 
 		if (signal) {
 			signal.addEventListener("abort", () => {
@@ -265,7 +269,9 @@ async function runAgentHook(
 			proc.kill("SIGTERM");
 		}, timeout);
 
-		proc.stdout.on("data", (d) => (output += d.toString()));
+		proc.stdout.on("data", (d) => {
+			output += d.toString();
+		});
 
 		if (signal) {
 			signal.addEventListener("abort", () => {

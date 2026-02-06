@@ -5,7 +5,7 @@
  * Just prints and scrolls away naturally
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import { Key, visibleWidth } from "@mariozechner/pi-tui";
 
 /** A single keyboard shortcut with its key combo and description. */
@@ -82,7 +82,7 @@ function padRight(str: string, len: number): string {
  * @param width - Available terminal width in columns
  * @returns Formatted cheatsheet string
  */
-function buildCheatsheet(theme: any, width: number): string {
+function buildCheatsheet(theme: Theme, width: number): string {
 	const useTwoCol = width >= MIN_TWO_COL_WIDTH;
 	const lines: string[] = [];
 

@@ -4,7 +4,7 @@
  */
 
 import * as fs from "node:fs";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 
 const STATE_FILE = "/tmp/tool-proxy-state.json";
 const TOOL_PROXY_URL = "http://localhost:3100";
@@ -32,7 +32,7 @@ interface StateFile {
 }
 
 // Store interval on globalThis to clear across reloads
-const G = globalThis as any;
+const G = globalThis;
 if (G.__piToolProxyStatusInterval) {
 	clearInterval(G.__piToolProxyStatusInterval);
 	G.__piToolProxyStatusInterval = null;
@@ -71,8 +71,8 @@ async function checkToolProxyStatus(): Promise<{ state: ProxyState; stale: boole
 			return { state: "connected", stale: false };
 		}
 		return { state: "error", stale: false };
-	} catch (err: any) {
-		if (err.name === "AbortError") {
+	} catch (err: unknown) {
+		if (err instanceof Error && err.name === "AbortError") {
 			return { state: "connecting", stale: false };
 		}
 		return { state: "disconnected", stale: false };
@@ -114,7 +114,7 @@ export default function toolProxyStatus(pi: ExtensionAPI): void {
 	 * Updates the tool-proxy status in the UI status bar.
 	 * @param ctx - The extension context providing UI access
 	 */
-	async function updateStatus(ctx: any) {
+	async function updateStatus(ctx: ExtensionContext) {
 		const { state, stale } = await checkToolProxyStatus();
 		ctx.ui.setStatus("tool-proxy", formatStatus(state, stale));
 	}

@@ -209,7 +209,9 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 						.reverse()
 						.find(
 							(e) =>
-								e.type === "message" && e.message.role === "assistant" && (e.message as any).stopReason !== "aborted"
+								e.type === "message" &&
+								e.message.role === "assistant" &&
+								(e.message as unknown as Record<string, string>).stopReason !== "aborted"
 						);
 
 					let contextTokens = 0;
@@ -283,7 +285,8 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 					const modelName = model?.id || "no-model";
 					let modelStr = modelName;
 					if (model?.reasoning) {
-						const thinkingLevel = (extensionCtx as any).thinkingLevel || pi.getThinkingLevel() || "off";
+						const thinkingLevel =
+							(extensionCtx as unknown as Record<string, string>).thinkingLevel || pi.getThinkingLevel() || "off";
 						modelStr = thinkingLevel === "off" ? `${modelName} • thinking off` : `${modelName} • ${thinkingLevel}`;
 					}
 

@@ -25,6 +25,23 @@ const MIN_SIDE_BY_SIDE_WIDTH = 120;
 /** Lifecycle state of a task. */
 type TaskStatus = "pending" | "in_progress" | "completed";
 
+/** Shape of background task entries read from globalThis.__piBackgroundTasks */
+interface BgTaskView {
+	id: string;
+	command: string;
+	status: string;
+	startTime: number;
+}
+
+/** Shape of subagent entries read from globalThis.__piRunning/BackgroundSubagents */
+interface SubagentView {
+	id: string;
+	agent: string;
+	task: string;
+	status?: string;
+	startTime: number;
+}
+
 /** A single task with status, dependencies, and timestamps. */
 interface Task {
 	id: string;
@@ -82,8 +99,7 @@ function _extractTasksFromText(text: string): string[] {
 
 	// Match numbered lists: "1. task", "1) task"
 	const numberedRegex = /^\s*(\d+)[.)]\s+(.+)$/gm;
-	let match;
-	while ((match = numberedRegex.exec(text)) !== null) {
+	for (const match of text.matchAll(numberedRegex)) {
 		const task = match[2].trim();
 		if (task && !task.startsWith("[") && task.length > 3) {
 			tasks.push(task);
@@ -92,7 +108,7 @@ function _extractTasksFromText(text: string): string[] {
 
 	// Match checkbox lists: "- [ ] task", "- [x] task", "* [ ] task"
 	const checkboxRegex = /^\s*[-*]\s*\[[ x]\]\s+(.+)$/gim;
-	while ((match = checkboxRegex.exec(text)) !== null) {
+	for (const match of text.matchAll(checkboxRegex)) {
 		const task = match[1].trim();
 		if (task && task.length > 3) {
 			tasks.push(task);
@@ -101,7 +117,7 @@ function _extractTasksFromText(text: string): string[] {
 
 	// Match "Task:" or "TODO:" headers followed by items
 	const taskHeaderRegex = /(?:Tasks?|TODO|To-?do|Steps?):\s*\n((?:\s*[-*\d.]+.+\n?)+)/gi;
-	while ((match = taskHeaderRegex.exec(text)) !== null) {
+	for (const match of text.matchAll(taskHeaderRegex)) {
 		const block = match[1];
 		const items = block.split("\n").filter((line) => line.trim());
 		for (const item of items) {
@@ -228,8 +244,8 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	function renderSubagentLines(
 		ctx: ExtensionContext,
 		spinner: string,
-		fgRunning: any[],
-		bgRunning: any[],
+		fgRunning: Array<{ agent: string; task: string; startTime: number }>,
+		bgRunning: Array<{ agent: string; task: string; startTime: number }>,
 		maxTaskPreviewLen: number,
 		_standalone: boolean
 	): string[] {
@@ -291,10 +307,10 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	 * Render background bash task lines
 	 */
 	function renderBgBashLines(ctx: ExtensionContext, maxCmdLen: number): string[] {
-		const bgTasksMap = (globalThis as any).__piBackgroundTasks as Map<string, any> | undefined;
+		const bgTasksMap = globalThis.__piBackgroundTasks;
 		if (!bgTasksMap) return [];
 
-		const running = [...bgTasksMap.values()].filter((t: any) => t.status === "running");
+		const running = ([...bgTasksMap.values()] as unknown as BgTaskView[]).filter((t) => t.status === "running");
 		if (running.length === 0) return [];
 
 		const lines: string[] = [];
@@ -353,13 +369,17 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 	function updateWidget(ctx: ExtensionContext): void {
 		// Check for foreground (sync) and background subagents
-		const fgSubagentsMap = (globalThis as any).__piRunningSubagents as Map<string, any> | undefined;
-		const bgSubagentsMap = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
-		const bgTasksMap = (globalThis as any).__piBackgroundTasks as Map<string, any> | undefined;
+		const fgSubagentsMap = globalThis.__piRunningSubagents;
+		const bgSubagentsMap = globalThis.__piBackgroundSubagents;
+		const bgTasksMap = globalThis.__piBackgroundTasks;
 
-		const fgRunning = fgSubagentsMap ? [...fgSubagentsMap.values()] : [];
-		const bgRunning = bgSubagentsMap ? [...bgSubagentsMap.values()].filter((s: any) => s.status === "running") : [];
-		const bgTasks = bgTasksMap ? [...bgTasksMap.values()].filter((t: any) => t.status === "running") : [];
+		const fgRunning: SubagentView[] = fgSubagentsMap ? ([...fgSubagentsMap.values()] as unknown as SubagentView[]) : [];
+		const bgRunning = bgSubagentsMap
+			? ([...bgSubagentsMap.values()] as unknown as SubagentView[]).filter((s) => s.status === "running")
+			: [];
+		const bgTasks = bgTasksMap
+			? ([...bgTasksMap.values()] as unknown as BgTaskView[]).filter((t) => t.status === "running")
+			: [];
 
 		const hasSubagents = fgRunning.length > 0 || bgRunning.length > 0;
 		const hasBgTasks = bgTasks.length > 0;
@@ -378,9 +398,9 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 		// Build stable key for structure changes
 		const taskStates = state.tasks.map((t) => `${t.id}:${t.status}`).join(",");
-		const fgIds = fgRunning.map((s: any) => s.id).join(",");
-		const bgIds = bgRunning.map((s: any) => s.id).join(",");
-		const bgTaskIds = bgTasks.map((t: any) => t.id).join(",");
+		const fgIds = fgRunning.map((s) => s.id).join(",");
+		const bgIds = bgRunning.map((s) => s.id).join(",");
+		const bgTaskIds = bgTasks.map((t) => t.id).join(",");
 		const stableKey = `${taskStates}|${fgIds}|${bgIds}|${bgTaskIds}`;
 
 		// Only update when structure changes or background items running (for animation)
@@ -711,7 +731,7 @@ IMPORTANT RULES:
 			_toolCallId: string,
 			params: { action: string; task?: string; tasks?: string[]; index?: number; indices?: number[] },
 			_signal: AbortSignal | undefined,
-			_onUpdate: any,
+			_onUpdate: unknown,
 			ctx: ExtensionContext
 		) {
 			switch (params.action) {
@@ -931,7 +951,7 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 
 	// Interval for updating background subagents/tasks display
 	// Store interval on globalThis so we can clear it across reloads
-	const G = globalThis as any;
+	const G = globalThis;
 	if (G.__piTasksInterval) {
 		clearInterval(G.__piTasksInterval);
 	}
@@ -958,13 +978,17 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 		// Start interval to animate subagents and background tasks
 		if (G.__piTasksInterval) clearInterval(G.__piTasksInterval);
 		G.__piTasksInterval = setInterval(() => {
-			const fgSubagents = (globalThis as any).__piRunningSubagents as Map<string, any> | undefined;
-			const bgSubagents = (globalThis as any).__piBackgroundSubagents as Map<string, any> | undefined;
-			const bgTasks = (globalThis as any).__piBackgroundTasks as Map<string, any> | undefined;
+			const fgSubagents = globalThis.__piRunningSubagents;
+			const bgSubagents = globalThis.__piBackgroundSubagents;
+			const bgTasks = globalThis.__piBackgroundTasks;
 
 			const fgRunning = fgSubagents ? fgSubagents.size : 0;
-			const bgRunning = bgSubagents ? [...bgSubagents.values()].filter((s: any) => s.status === "running").length : 0;
-			const bgTaskRunning = bgTasks ? [...bgTasks.values()].filter((t: any) => t.status === "running").length : 0;
+			const bgRunning = bgSubagents
+				? ([...bgSubagents.values()] as unknown as SubagentView[]).filter((s) => s.status === "running").length
+				: 0;
+			const bgTaskRunning = bgTasks
+				? ([...bgTasks.values()] as unknown as BgTaskView[]).filter((t) => t.status === "running").length
+				: 0;
 			const hasActiveTask = state.tasks.some((t) => t.status === "in_progress");
 
 			const hasRunning = fgRunning > 0 || bgRunning > 0 || bgTaskRunning > 0 || hasActiveTask;

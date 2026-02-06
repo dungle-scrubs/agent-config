@@ -76,7 +76,7 @@ const activeLoaders = new Map<string, InstanceType<typeof Loader>>();
 
 // Global task registry (exposed via globalThis for tasks extension to read)
 const tasks = new Map<string, BackgroundTask>();
-(globalThis as any).__piBackgroundTasks = tasks;
+globalThis.__piBackgroundTasks = tasks as unknown as GlobalMap;
 let taskCounter = 0;
 
 /**
@@ -389,7 +389,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 						(s) => theme.fg("muted", s),
 						"Running..."
 					);
-					(loader as any).frames = ["◐", "◓", "◑", "◒"];
+					(loader as unknown as Record<string, string[]>).frames = ["◐", "◓", "◑", "◒"];
 					activeLoaders.set(tid, loader);
 				}
 				if (loader) {

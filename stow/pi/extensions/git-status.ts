@@ -31,7 +31,7 @@ interface GitState {
 }
 
 // Store interval on globalThis to clear across reloads
-const G = globalThis as any;
+const G = globalThis;
 if (G.__piGitStatusInterval) {
 	clearInterval(G.__piGitStatusInterval);
 	G.__piGitStatusInterval = null;

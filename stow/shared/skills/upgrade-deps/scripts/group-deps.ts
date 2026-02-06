@@ -170,9 +170,10 @@ async function readStdin(): Promise<string> {
 		}
 
 		process.stdin.on("readable", () => {
-			let chunk;
-			while ((chunk = process.stdin.read()) !== null) {
+			let chunk = process.stdin.read();
+			while (chunk !== null) {
 				data += chunk;
+				chunk = process.stdin.read();
 			}
 		});
 

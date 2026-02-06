@@ -361,10 +361,10 @@ WORKFLOW: discover_tools -> execute_tool`,
 					project_cwd: ctx.cwd,
 				});
 				return formatResult(result);
-			} catch (error: any) {
+			} catch (error: unknown) {
 				return {
 					details: {},
-					content: [{ type: "text", text: `Error: ${error.message}` }],
+					content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
 					isError: true,
 				};
 			}
@@ -421,10 +421,10 @@ WHEN TO USE:
 				});
 				// Use concise formatting with app-specific summarization
 				return formatResult(result, true, params.app, params.tool);
-			} catch (error: any) {
+			} catch (error: unknown) {
 				return {
 					details: {},
-					content: [{ type: "text", text: `Error: ${error.message}` }],
+					content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
 					isError: true,
 				};
 			}
@@ -471,10 +471,10 @@ WHEN TO USE:
 					project_cwd: ctx.cwd,
 				});
 				return formatResult(result);
-			} catch (error: any) {
+			} catch (error: unknown) {
 				return {
 					details: {},
-					content: [{ type: "text", text: `Error: ${error.message}` }],
+					content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
 					isError: true,
 				};
 			}
@@ -512,10 +512,10 @@ WHEN TO USE:
 			try {
 				const result = await callTool("get_app_context", { app: params.app });
 				return formatResult(result);
-			} catch (error: any) {
+			} catch (error: unknown) {
 				return {
 					details: {},
-					content: [{ type: "text", text: `Error: ${error.message}` }],
+					content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
 					isError: true,
 				};
 			}
@@ -583,10 +583,10 @@ SANDBOX: Runs in isolated container with network access only to allowed domains.
 					timeout: params.timeout,
 				});
 				return formatResult(result);
-			} catch (error: any) {
+			} catch (error: unknown) {
 				return {
 					details: {},
-					content: [{ type: "text", text: `Error: ${error.message}` }],
+					content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
 					isError: true,
 				};
 			}

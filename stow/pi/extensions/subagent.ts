@@ -19,7 +19,13 @@ import * as path from "node:path";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
 import { StringEnum } from "@mariozechner/pi-ai";
-import { type ExtensionAPI, getMarkdownTheme, parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import {
+	type ExtensionAPI,
+	type ExtensionContext,
+	getMarkdownTheme,
+	parseFrontmatter,
+	type ThemeColor,
+} from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
@@ -205,8 +211,8 @@ interface BackgroundSubagent {
 const backgroundSubagents = new Map<string, BackgroundSubagent>();
 
 // Export to global for tasks extension to read
-(globalThis as any).__piBackgroundSubagents = backgroundSubagents;
-(globalThis as any).__piRunningSubagents = runningSubagents;
+globalThis.__piBackgroundSubagents = backgroundSubagents as unknown as GlobalMap;
+globalThis.__piRunningSubagents = runningSubagents as unknown as GlobalMap;
 const _backgroundRequested = false;
 
 // Background subagents are rendered by tasks extension via shared global
@@ -219,7 +225,7 @@ function updateBackgroundWidget(): void {
 }
 // widgetIntervalId is defined below in updateWidget section
 const _spinnerFrame = 0;
-let uiContext: any = null;
+let uiContext: ExtensionContext | null = null;
 
 /**
  * Generates a random 8-character ID for tracking subagent invocations.
@@ -259,7 +265,7 @@ function _padRight(str: string, len: number): string {
 }
 
 // Store interval on globalThis to clear across reloads
-const G = globalThis as any;
+const G = globalThis;
 if (G.__piSubagentWidgetInterval) {
 	clearInterval(G.__piSubagentWidgetInterval);
 	G.__piSubagentWidgetInterval = null;
@@ -383,7 +389,7 @@ function formatUsageStats(
 function formatToolCall(
 	toolName: string,
 	args: Record<string, unknown>,
-	themeFg: (color: any, text: string) => string
+	themeFg: (color: ThemeColor, text: string) => string
 ): string {
 	const shortenPath = (p: string) => {
 		const home = os.homedir();
@@ -499,7 +505,7 @@ function getFinalOutput(messages: Message[]): string {
 }
 
 /** Union type for displayable items extracted from subagent messages. */
-type DisplayItem = { type: "text"; text: string } | { type: "toolCall"; name: string; args: Record<string, any> };
+type DisplayItem = { type: "text"; text: string } | { type: "toolCall"; name: string; args: Record<string, unknown> };
 
 /**
  * Extract all displayable items (text + tool calls) from assistant messages.
@@ -852,7 +858,8 @@ async function runSingleAgent(
 
 			const processLine = (line: string) => {
 				if (!line.trim()) return;
-				let event: any;
+				// biome-ignore lint/suspicious/noExplicitAny: pi subagent JSON protocol has dynamic shape
+				let event: Record<string, any>;
 				try {
 					event = JSON.parse(line);
 				} catch {
@@ -1362,7 +1369,7 @@ WHEN NOT TO USE SUBAGENTS:
 				const emitSingleUpdate = () => {
 					if (onUpdate && lastUpdate) {
 						if (lastUpdate.details) {
-							(lastUpdate.details as any).spinnerFrame = singleSpinnerFrame;
+							(lastUpdate.details as unknown as Record<string, unknown>).spinnerFrame = singleSpinnerFrame;
 						}
 						onUpdate(lastUpdate);
 					}

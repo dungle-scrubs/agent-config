@@ -26,9 +26,9 @@
 			},
 			"suspicious": {
 				"noControlCharactersInRegex": "off",
-				"noExplicitAny": "warn",
-				"noImplicitAnyLet": "warn",
-				"noAssignInExpressions": "warn",
+				"noExplicitAny": "error",
+				"noImplicitAnyLet": "error",
+				"noAssignInExpressions": "error",
 				"noEmptyBlockStatements": "off",
 				"noEvolvingTypes": "off",
 				"noConsole": "off",
@@ -63,11 +63,7 @@
 		{
 			"includes": ["**/*.d.ts"],
 			"linter": {
-				"rules": {
-					"suspicious": {
-						"noExplicitAny": "off"
-					}
-				}
+				"enabled": false
 			}
 		},
 		{

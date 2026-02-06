@@ -9,7 +9,7 @@
  * - format: "text" | "markdown" | "html" (default "text", Firecrawl returns markdown)
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
@@ -21,7 +21,7 @@ const DEFAULT_MAX_BYTES = 50_000;
  * @param _ctx - Extension context (unused)
  * @returns Markdown content or null if Firecrawl unavailable
  */
-async function tryFirecrawl(url: string, _ctx: any): Promise<string | null> {
+async function tryFirecrawl(url: string, _ctx: ExtensionContext): Promise<string | null> {
 	try {
 		// Import dynamically to avoid hard dependency
 		const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
@@ -47,9 +47,9 @@ async function tryFirecrawl(url: string, _ctx: any): Promise<string | null> {
 				},
 			});
 
-			const content = (result as any)?.content;
+			const content = (result as { content?: Array<{ type: string; text?: string }> })?.content;
 			if (Array.isArray(content) && content.length > 0) {
-				const text = content.find((c: any) => c.type === "text")?.text;
+				const text = content.find((c) => c.type === "text")?.text;
 				if (text && !text.includes("[TOOL_ERROR]")) {
 					return text;
 				}
@@ -177,10 +177,11 @@ AUTOMATIC FIRECRAWL FALLBACK:
 						source: "fetch",
 					},
 				};
-			} catch (error: any) {
+			} catch (error: unknown) {
+				const msg = error instanceof Error ? error.message : String(error);
 				return {
-					content: [{ type: "text", text: `Fetch error: ${error.message}` }],
-					details: { url: params.url, error: error.message, isError: true },
+					content: [{ type: "text", text: `Fetch error: ${msg}` }],
+					details: { url: params.url, error: msg, isError: true },
 				};
 			}
 		},
@@ -191,7 +192,16 @@ AUTOMATIC FIRECRAWL FALLBACK:
 		},
 
 		renderResult(result, { expanded }, theme) {
-			const details = result.details as any;
+			const details = result.details as
+				| {
+						url?: string;
+						error?: string;
+						isError?: boolean;
+						source?: string;
+						totalBytes?: number;
+						truncated?: boolean;
+				  }
+				| undefined;
 			if (!details) {
 				const text = result.content[0];
 				return new Text(text?.type === "text" ? text.text : "(no output)", 0, 0);
@@ -205,7 +215,7 @@ AUTOMATIC FIRECRAWL FALLBACK:
 				const size = details.totalBytes ? ` (${(details.totalBytes / 1024).toFixed(1)}KB)` : "";
 				const truncNote = details.truncated && details.source !== "firecrawl" ? " [truncated]" : "";
 				summary =
-					theme.fg("success", "✓ ") + theme.fg("dim", details.url) + theme.fg("muted", size + source + truncNote);
+					theme.fg("success", "✓ ") + theme.fg("dim", details.url ?? "") + theme.fg("muted", size + source + truncNote);
 			}
 
 			if (expanded && !details.isError) {

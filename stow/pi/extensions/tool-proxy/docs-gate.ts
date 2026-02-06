@@ -37,8 +37,7 @@ function parseCachedDocs(): CachedDoc[] {
 		const content = fs.readFileSync(LIST_FILE, "utf-8");
 		const docs: CachedDoc[] = [];
 		const pattern = /\|\s*([^|]+?)\s*\|\s*(https?:\/\/[^|]+?)\s*\|\s*([^|]+?)\s*\|/g;
-		let match: RegExpExecArray | null;
-		while ((match = pattern.exec(content)) !== null) {
+		for (const match of content.matchAll(pattern)) {
 			const [, name, url, file] = match;
 			if (name.trim() !== "Doc") {
 				docs.push({ name: name.trim(), url: url.trim(), file: file.trim() });
