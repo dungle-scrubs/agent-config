@@ -56,7 +56,7 @@ Projects with explicitly assigned ports (to avoid conflicts):
 | 3017 | my-support/demo        | ~/dev/my-support/apps/demo              |
 | 3018 | my-support/widget      | ~/dev/my-support/apps/widget            |
 | 3019 | code-hunt/dashboard    | ~/dev/claude-plugins/games/skills/code-hunt |
-| 3020 | give-me-more-pi        | ~/dev/give-me-more-pi                        |
+| 3020 | more-pi                | ~/dev/more-pi                                |
 | 3021 | fuse/visual-evals      | ~/dev/fuse/visual-evals                      |
 | 3022 | dungle-scrubs          | ~/dev/dungle-scrubs                          |
 
