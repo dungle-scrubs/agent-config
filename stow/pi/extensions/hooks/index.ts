@@ -30,6 +30,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 
+import rmApproval from "./rm-approval.js";
+
 // Hook types matching Claude Code
 type HookType = "command" | "prompt" | "agent";
 
@@ -317,6 +319,9 @@ async function runAgentHook(
  * @param pi - Extension API for registering event handlers
  */
 export default function (pi: ExtensionAPI) {
+	// Register inline approval gates (TypeScript — needs ctx.ui)
+	rmApproval(pi);
+
 	let hooksConfig: HooksConfig = {};
 	let agentsDir = "";
 	let currentCwd = "";

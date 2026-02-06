@@ -1,0 +1,16 @@
+{
+	"hooks": {
+		"tool_call": [
+			{
+				"matcher": "bash",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "~/.pi/agent/extensions/hooks/tool_call.sh",
+						"timeout": 5
+					}
+				]
+			}
+		]
+	}
+}
