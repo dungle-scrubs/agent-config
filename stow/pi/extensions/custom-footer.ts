@@ -21,7 +21,14 @@ interface GitState {
 	dirty: boolean;
 	ahead: number;
 	behind: number;
+	isWorktree: boolean;
 }
+
+// Cache git state to avoid running git on every render
+let cachedGitState: GitState | null = null;
+let cachedCwd: string | null = null;
+let lastGitCheck = 0;
+const GIT_CACHE_TTL = 5000; // 5 seconds
 
 /**
  * Runs a git command and returns output or null on error.
@@ -41,30 +48,43 @@ function runGit(cmd: string): string | null {
 }
 
 /**
- * Checks if current directory is a git worktree.
- * @returns True if in a git worktree, false otherwise
- */
-function isGitWorktree(): boolean {
-	const gitDir = runGit("rev-parse --git-dir");
-	if (!gitDir) return false;
-	// In a worktree, git-dir contains "worktrees" path segment
-	return gitDir.includes("/worktrees/");
-}
-
-/**
- * Gets git state including branch, dirty status, and ahead/behind counts.
+ * Gets git state with caching. Only runs git commands if cache is stale.
+ * @param forceRefresh - Force a refresh of the cache
  * @returns Git state object or null if not in a git repo
  */
-function getGitState(): GitState | null {
+function getGitState(forceRefresh = false): GitState | null {
+	const now = Date.now();
+	const cwd = process.cwd();
+
+	// Return cached state if valid
+	if (
+		!forceRefresh &&
+		cachedGitState !== null &&
+		cachedCwd === cwd &&
+		now - lastGitCheck < GIT_CACHE_TTL
+	) {
+		return cachedGitState;
+	}
+
+	// Refresh cache
+	cachedCwd = cwd;
+	lastGitCheck = now;
+
 	const gitDir = runGit("rev-parse --git-dir");
-	if (!gitDir) return null;
+	if (!gitDir) {
+		cachedGitState = null;
+		return null;
+	}
 
 	let branch = runGit("branch --show-current");
 	if (!branch) {
 		branch = runGit("rev-parse --short HEAD");
 		if (branch) branch = `(${branch})`;
 	}
-	if (!branch) return null;
+	if (!branch) {
+		cachedGitState = null;
+		return null;
+	}
 
 	const status = runGit("status --porcelain");
 	const dirty = status !== null && status.length > 0;
@@ -81,7 +101,18 @@ function getGitState(): GitState | null {
 		}
 	}
 
-	return { branch, dirty, ahead, behind };
+	// Check worktree
+	const isWorktree = gitDir.includes("/worktrees/");
+
+	cachedGitState = { branch, dirty, ahead, behind, isWorktree };
+	return cachedGitState;
+}
+
+/**
+ * Invalidate the git cache (call after file operations)
+ */
+function invalidateGitCache(): void {
+	lastGitCheck = 0;
 }
 
 // Minimum width for side-by-side layout
@@ -131,8 +162,18 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 	let extensionCtx: ExtensionContext | null = null;
 	let autoCompactEnabled = true;
 
+	// Invalidate git cache after file operations
+	pi.on("tool_result", async (event, _ctx) => {
+		if (["write", "edit", "bash"].includes(event.toolName)) {
+			invalidateGitCache();
+		}
+	});
+
 	pi.on("session_start", async (_event, ctx) => {
 		extensionCtx = ctx;
+
+		// Initial git state fetch
+		getGitState(true);
 
 		ctx.ui.setFooter((tui, theme, footerData) => {
 			let disposeHandler: (() => void) | undefined;
@@ -190,13 +231,13 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 						pwd = `~${pwd.slice(home.length)}`;
 					}
 
-					// Git branch with status symbols
+					// Git branch with status symbols (cached!)
 					const gitState = getGitState();
 					let gitBranch = "";
 					if (gitState?.branch) {
 						const parts: string[] = [];
 						// Worktree badge (teal bg, dark text) - to the left of branch
-						if (isGitWorktree()) {
+						if (gitState.isWorktree) {
 							parts.push(`\x1b[48;2;94;234;212m\x1b[38;2;19;78;74m worktree \x1b[0m`);
 						}
 						// Branch icon and name (teal)
@@ -277,7 +318,8 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 				},
 
 				invalidate(): void {
-					// No caching
+					// Force git refresh on next render
+					invalidateGitCache();
 				},
 
 				dispose: (() => {

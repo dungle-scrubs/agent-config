@@ -765,5 +765,55 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 					"Use the bg_bash tool instead for background tasks.",
 			};
 		}
+
+		// Detect commands likely to hang (should use bg_bash instead)
+		// These patterns open persistent connections or run interactive sessions
+		const hangPatterns: Array<{ pattern: RegExp; reason: string }> = [
+			{
+				pattern: /docker exec[^|]*node -e/,
+				reason: "docker exec with inline node script may hang if connections aren't closed",
+			},
+			{
+				pattern: /docker exec[^|]*python -c/,
+				reason: "docker exec with inline python script may hang if connections aren't closed",
+			},
+			{
+				pattern: /docker exec[^|]*-it\s/,
+				reason: "docker exec with interactive flag will hang",
+			},
+			{
+				pattern: /docker exec[^|]*--interactive/,
+				reason: "docker exec with --interactive will hang",
+			},
+			{
+				pattern: /\bpsql\b[^|]*-c\s+["']/,
+				reason: "psql with inline query may hang on connection issues",
+			},
+			{
+				pattern: /\bmysql\b[^|]*-e\s+["']/,
+				reason: "mysql with inline query may hang on connection issues",
+			},
+			{
+				pattern: /\bnc\b[^|]*-l/,
+				reason: "netcat listen mode will hang waiting for connections",
+			},
+			{
+				pattern: /\btail\b[^|]*-f/,
+				reason: "tail -f will run forever - use bg_bash",
+			},
+			{
+				pattern: /\bwatch\b\s/,
+				reason: "watch command runs forever - use bg_bash",
+			},
+		];
+
+		for (const { pattern, reason } of hangPatterns) {
+			if (pattern.test(command)) {
+				return {
+					block: true,
+					reason: `This command is likely to hang: ${reason}\n\nUse bg_bash instead for commands that may not exit promptly.`,
+				};
+			}
+		}
 	});
 }
