@@ -1,6 +1,18 @@
 {
 	"$schema": "./hooks.schema.json",
 	"hooks": {
+		"tool_call": [
+			{
+				"matcher": "bash",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "~/.pi/agent/extensions/hooks/tool-call/no-verify.sh",
+						"timeout": 5
+					}
+				]
+			}
+		],
 		"tool_result": [
 			{
 				"matcher": "write|edit",
@@ -15,26 +27,13 @@
 				]
 			}
 		],
-		"tool_call": [
-			{
-				"matcher": "bash",
-				"hooks": [
-					{
-						"type": "command",
-						"command": "~/.pi/hooks/validate-bash.sh",
-						"timeout": 5,
-						"statusMessage": "Validating command..."
-					}
-				]
-			}
-		],
 		"agent_end": [
 			{
 				"hooks": [
 					{
 						"type": "agent",
 						"agent": "reviewer",
-						"prompt": "The agent has finished responding. Review the conversation and check if all tasks were completed successfully. Return { \"ok\": true } if complete, or { \"ok\": false, \"reason\": \"...\" } with what still needs to be done.\n\n$ARGUMENTS",
+						"prompt": "The agent has finished. Check if all tasks were completed. Return { \"ok\": true } if complete, or { \"ok\": false, \"reason\": \"...\" } with remaining work.\n\n$ARGUMENTS",
 						"async": true
 					}
 				]
