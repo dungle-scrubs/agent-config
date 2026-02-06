@@ -23,11 +23,17 @@ const TOOLS_TO_SUMMARIZE = new Set([
 
 /**
  * Summarizes execute_tool results into a compact string.
+ * Returns null if this is an error that should be shown in full.
  */
-function summarizeExecuteToolResult(fullText: string, input: { app?: string; tool?: string }): string {
+function summarizeExecuteToolResult(fullText: string, input: { app?: string; tool?: string }): string | null {
   const app = input?.app ?? "?";
   const tool = input?.tool ?? "?";
   const sizeKb = (fullText.length / 1024).toFixed(1);
+
+  // Don't summarize errors - show them in full
+  if (fullText.startsWith("[") && fullText.includes("_ERROR]")) {
+    return null;
+  }
 
   // Try to parse as JSON to extract meaningful info
   try {
@@ -80,14 +86,25 @@ export default function toolProxySummary(pi: ExtensionAPI): void {
 
     switch (event.toolName) {
       case "get_app_context": {
-        const appNameMatch = fullText.match(/^#\s*(.+?)(?:\s+MCP)?$/m);
-        const appName = appNameMatch?.[1] ?? "App";
-        const toolCount = (fullText.match(/- \*\*[\w_]+\*\*/g) || []).length;
-        summary = `📖 ${appName} (${toolCount} tools, ${sizeKb}KB)`;
+        // Parse metadata from tool-proxy (format: <!-- tool-proxy:app=X,tools=N -->)
+        const metaMatch = fullText.match(/^<!-- tool-proxy:app=([^,]+),tools=(\d+) -->/);
+        if (metaMatch) {
+          const appName = metaMatch[1];
+          const toolCount = metaMatch[2];
+          summary = `📖 ${appName} (${toolCount} tools, ${sizeKb}KB)`;
+        } else {
+          // Fallback: parse from markdown (for backwards compatibility)
+          const appNameMatch = fullText.match(/^#\s*(.+?)(?:\s+MCP)?$/m);
+          const appName = appNameMatch?.[1] ?? "App";
+          const toolCount = (fullText.match(/- \*\*[\w_]+\*\*/g) || []).length;
+          summary = `📖 ${appName} (${toolCount} tools, ${sizeKb}KB)`;
+        }
         break;
       }
       case "execute_tool": {
-        summary = summarizeExecuteToolResult(fullText, event.input as { app?: string; tool?: string });
+        const result = summarizeExecuteToolResult(fullText, event.input as { app?: string; tool?: string });
+        if (result === null) return; // Don't summarize errors
+        summary = result;
         break;
       }
       case "discover_tools": {
