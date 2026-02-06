@@ -1,5 +1,5 @@
 {
-	"$schema": "./agent/extensions/hooks/hooks.schema.json",
+	"$schema": "./extensions/hooks/hooks.schema.json",
 	"hooks": {
 		"tool_call": [
 			{
@@ -7,7 +7,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "~/.pi/agent/extensions/hooks/tool-call/no-verify.sh",
+						"command": "~/.pi/agent/extensions/hooks/tool-call.sh",
 						"timeout": 5
 					}
 				]

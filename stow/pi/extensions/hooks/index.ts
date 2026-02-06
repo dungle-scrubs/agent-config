@@ -30,7 +30,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 
-import rmApproval from "./tool-call/rm-approval.js";
+import rmApproval from "./rm-approval.js";
 
 /** Hook execution strategy: shell command, LLM prompt, or agent subprocess. */
 type HookType = "command" | "prompt" | "agent";
