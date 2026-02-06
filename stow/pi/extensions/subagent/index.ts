@@ -39,7 +39,7 @@ const _C_OVERLAY = "\x1b[38;2;110;115;141m";
 // Spinner frames
 const SPINNER_FRAMES = ["◐", "◓", "◑", "◒"];
 
-// Widget state for active (foreground) subagents
+/** Tracks a foreground subagent currently executing inline. */
 interface RunningSubagent {
 	id: string;
 	agent: string;
@@ -49,7 +49,7 @@ interface RunningSubagent {
 
 const runningSubagents = new Map<string, RunningSubagent>();
 
-// Background subagent tracking
+/** Tracks a background subagent running as a detached process. */
 interface BackgroundSubagent {
 	id: string;
 	agent: string;
@@ -105,6 +105,12 @@ function formatDuration(ms: number): string {
 // Fixed-width box: 60 chars wide
 const _BOX_WIDTH = 60;
 
+/**
+ * Pad a string with spaces to a target length, accounting for ANSI escape codes.
+ * @param str - String to pad (may contain ANSI codes)
+ * @param len - Target length
+ * @returns Padded string
+ */
 function _padRight(str: string, len: number): string {
 	// Strip ANSI codes for length calculation
 	const stripped = str.replace(/\x1b\[[0-9;]*m/g, "");
@@ -161,6 +167,12 @@ function clearAllSubagents(): void {
 	// Background subagents rendered by tasks extension, no separate widget needed
 }
 
+/**
+ * Register a new foreground subagent and start widget updates.
+ * @param agent - Agent name
+ * @param task - Task description
+ * @returns Generated tracking ID
+ */
 function _registerSubagent(agent: string, task: string): string {
 	const id = generateId();
 	runningSubagents.set(id, { id, agent, task, startTime: Date.now() });
@@ -168,11 +180,20 @@ function _registerSubagent(agent: string, task: string): string {
 	return id;
 }
 
+/**
+ * Mark a foreground subagent as complete and update the widget.
+ * @param id - Subagent tracking ID
+ */
 function _completeSubagent(id: string): void {
 	runningSubagents.delete(id);
 	updateWidget();
 }
 
+/**
+ * Format a token count as a compact string (e.g., 1500 → "1.5k").
+ * @param count - Token count
+ * @returns Compact formatted string
+ */
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
 	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
@@ -180,6 +201,12 @@ function formatTokens(count: number): string {
 	return `${(count / 1000000).toFixed(1)}M`;
 }
 
+/**
+ * Format token usage stats into a compact one-line summary.
+ * @param usage - Token usage breakdown
+ * @param model - Optional model name to append
+ * @returns Formatted usage string (e.g., "3 turns ↑1.2k ↓500 $0.0042")
+ */
 function formatUsageStats(
 	usage: {
 		input: number;
@@ -206,6 +233,13 @@ function formatUsageStats(
 	return parts.join(" ");
 }
 
+/**
+ * Format a tool call as a compact one-line summary for display.
+ * @param toolName - Name of the tool called
+ * @param args - Tool call arguments
+ * @param themeFg - Theme foreground color function
+ * @returns Formatted string showing tool name and key arguments
+ */
 function formatToolCall(
 	toolName: string,
 	args: Record<string, unknown>,
@@ -272,6 +306,7 @@ function formatToolCall(
 	}
 }
 
+/** Token usage statistics from a subagent execution. */
 interface UsageStats {
 	input: number;
 	output: number;
@@ -282,6 +317,7 @@ interface UsageStats {
 	turns: number;
 }
 
+/** Result from a single subagent execution. */
 interface SingleResult {
 	agent: string;
 	agentSource: "user" | "project" | "unknown";
@@ -296,6 +332,7 @@ interface SingleResult {
 	step?: number;
 }
 
+/** Details passed to renderResult for subagent tool execution display. */
 interface SubagentDetails {
 	mode: "single" | "parallel" | "chain";
 	agentScope: AgentScope;
@@ -304,6 +341,11 @@ interface SubagentDetails {
 	spinnerFrame?: number; // For animated spinner during execution
 }
 
+/**
+ * Extract the final assistant text output from a message history.
+ * @param messages - Array of conversation messages
+ * @returns Last assistant text content, or empty string
+ */
 function getFinalOutput(messages: Message[]): string {
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const msg = messages[i];
@@ -316,8 +358,14 @@ function getFinalOutput(messages: Message[]): string {
 	return "";
 }
 
+/** Union type for displayable items extracted from subagent messages. */
 type DisplayItem = { type: "text"; text: string } | { type: "toolCall"; name: string; args: Record<string, any> };
 
+/**
+ * Extract all displayable items (text + tool calls) from assistant messages.
+ * @param messages - Array of conversation messages
+ * @returns Ordered array of display items
+ */
 function getDisplayItems(messages: Message[]): DisplayItem[] {
 	const items: DisplayItem[] = [];
 	for (const msg of messages) {
@@ -331,6 +379,13 @@ function getDisplayItems(messages: Message[]): DisplayItem[] {
 	return items;
 }
 
+/**
+ * Map items with a concurrency limit using a worker pool pattern.
+ * @param items - Items to process
+ * @param concurrency - Maximum concurrent operations
+ * @param fn - Async function to apply to each item
+ * @returns Array of results in original order
+ */
 async function mapWithConcurrencyLimit<TIn, TOut>(
 	items: TIn[],
 	concurrency: number,
@@ -351,6 +406,12 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
 	return results;
 }
 
+/**
+ * Write a subagent prompt to a temporary file for the pi subprocess.
+ * @param agentName - Agent name (sanitized for filename)
+ * @param prompt - System prompt content
+ * @returns Object with temp directory and file path
+ */
 function writePromptToTempFile(agentName: string, prompt: string): { dir: string; filePath: string } {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-subagent-"));
 	const safeName = agentName.replace(/[^\w.-]+/g, "_");
@@ -359,7 +420,16 @@ function writePromptToTempFile(agentName: string, prompt: string): { dir: string
 	return { dir: tmpDir, filePath };
 }
 
-// Start a subagent in background mode - spawns process but doesn't await
+/**
+ * Spawn a subagent as a detached background process.
+ * @param defaultCwd - Default working directory
+ * @param agents - Available agent configurations
+ * @param agentName - Name of the agent to spawn
+ * @param task - Task to delegate
+ * @param cwd - Optional working directory override
+ * @param piEvents - Optional event emitter for subagent lifecycle events
+ * @returns Background subagent ID, or null if agent not found
+ */
 function spawnBackgroundSubagent(
 	defaultCwd: string,
 	agents: AgentConfig[],
@@ -541,8 +611,16 @@ function spawnBackgroundSubagent(
 	return id;
 }
 
+/** Callback for streaming partial results during subagent execution. */
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 
+/**
+ * Run a single subagent as a pi subprocess and collect its output.
+ * @param defaultCwd - Default working directory
+ * @param agents - Available agent configurations
+ * @param agentName - Name of the agent to run
+ * @param task - Task to delegate
+ */
 async function runSingleAgent(
 	defaultCwd: string,
 	agents: AgentConfig[],
@@ -804,6 +882,7 @@ export interface SubagentStartEvent {
 	background: boolean;
 }
 
+/** Event emitted when a subagent completes, for stop hooks to inspect. */
 export interface SubagentStopEvent {
 	agent_id: string;
 	agent_type: string;

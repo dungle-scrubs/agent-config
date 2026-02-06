@@ -32,9 +32,10 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 
 import rmApproval from "./rm-approval.js";
 
-// Hook types matching Claude Code
+/** Hook execution strategy: shell command, LLM prompt, or agent subprocess. */
 type HookType = "command" | "prompt" | "agent";
 
+/** Configuration for a single hook action triggered by an event. */
 interface HookHandler {
 	type: HookType;
 	command?: string; // For type: "command"
@@ -46,15 +47,18 @@ interface HookHandler {
 	statusMessage?: string; // Custom spinner message
 }
 
+/** Event matcher with associated hooks — runs hooks when matcher regex matches. */
 interface HookMatcher {
 	matcher?: string; // Regex pattern, empty = match all
 	hooks: HookHandler[];
 }
 
+/** Top-level hooks configuration keyed by event name. */
 interface HooksConfig {
 	[eventName: string]: HookMatcher[];
 }
 
+/** Result from executing a hook — may block, allow, or provide additional context. */
 interface HookResult {
 	ok: boolean;
 	reason?: string;

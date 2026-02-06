@@ -8,11 +8,13 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Key, visibleWidth } from "@mariozechner/pi-tui";
 
+/** A single keyboard shortcut with its key combo and description. */
 interface Shortcut {
 	key: string;
 	description: string;
 }
 
+/** A named group of related keyboard shortcuts. */
 interface Section {
 	title: string;
 	shortcuts: Shortcut[];
@@ -63,11 +65,23 @@ const SECTIONS: Section[] = [
 
 const MIN_TWO_COL_WIDTH = 70;
 
+/**
+ * Pad a string with spaces to reach a target visible width.
+ * @param str - String to pad (may contain ANSI codes)
+ * @param len - Target visible width
+ * @returns Padded string
+ */
 function padRight(str: string, len: number): string {
 	const vis = visibleWidth(str);
 	return str + " ".repeat(Math.max(0, len - vis));
 }
 
+/**
+ * Build the cheatsheet content as a themed string, using two columns when width allows.
+ * @param theme - Theme object for styling text
+ * @param width - Available terminal width in columns
+ * @returns Formatted cheatsheet string
+ */
 function buildCheatsheet(theme: any, width: number): string {
 	const useTwoCol = width >= MIN_TWO_COL_WIDTH;
 	const lines: string[] = [];
@@ -124,6 +138,10 @@ function buildCheatsheet(theme: any, width: number): string {
 	return lines.join("\n");
 }
 
+/**
+ * Display the cheatsheet as a notification.
+ * @param ctx - Extension context with UI access
+ */
 function showCheatsheet(ctx: ExtensionContext): void {
 	const cols = process.stdout.columns || 100;
 	const content = buildCheatsheet(ctx.ui.theme, cols);
@@ -131,6 +149,10 @@ function showCheatsheet(ctx: ExtensionContext): void {
 	process.stdout.write(content);
 }
 
+/**
+ * Register /keys command and Ctrl+? shortcut for the keyboard cheatsheet.
+ * @param pi - Extension API for registering commands and shortcuts
+ */
 export default function cheatsheetExtension(pi: ExtensionAPI): void {
 	pi.registerCommand("keys", {
 		description: "Show keyboard shortcuts",

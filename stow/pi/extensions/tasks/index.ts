@@ -22,9 +22,10 @@ import { Type } from "@sinclair/typebox";
 // Minimum width for side-by-side layout (tasks left, subagents right)
 const MIN_SIDE_BY_SIDE_WIDTH = 120;
 
-// Task states
+/** Lifecycle state of a task. */
 type TaskStatus = "pending" | "in_progress" | "completed";
 
+/** A single task with status, dependencies, and timestamps. */
 interface Task {
 	id: string;
 	title: string;
@@ -34,6 +35,7 @@ interface Task {
 	completedAt?: number;
 }
 
+/** Complete tasks widget state including visibility and active task tracking. */
 interface TasksState {
 	tasks: Task[];
 	visible: boolean;
@@ -70,6 +72,11 @@ function generateTaskId(): string {
 }
 
 // Extract tasks from text (numbered lists, checkboxes, etc.)
+/**
+ * Extract task titles from markdown-style task list text.
+ * @param text - Text containing task list items
+ * @returns Array of task title strings
+ */
 function _extractTasksFromText(text: string): string[] {
 	const tasks: string[] = [];
 

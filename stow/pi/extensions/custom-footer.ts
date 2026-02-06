@@ -16,6 +16,7 @@ import { execSync } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
+/** Cached git repository state for the footer display. */
 interface GitState {
 	branch: string | null;
 	dirty: boolean;

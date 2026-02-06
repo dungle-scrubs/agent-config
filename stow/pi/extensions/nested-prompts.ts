@@ -11,6 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
+/** Frontmatter parsed from a nested prompt markdown file. */
 interface PromptFrontmatter {
 	description?: string;
 	"argument-hint"?: string;

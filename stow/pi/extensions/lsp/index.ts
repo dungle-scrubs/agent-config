@@ -37,7 +37,7 @@ import {
 	WorkspaceSymbolRequest,
 } from "vscode-languageserver-protocol";
 
-// Server configurations for different languages
+/** Language server binary configuration and project detection markers. */
 interface ServerConfig {
 	command: string;
 	args: string[];
@@ -85,7 +85,7 @@ const SERVER_CONFIGS: Record<string, ServerConfig> = {
 	},
 };
 
-// Managed LSP connections - keyed by "language:projectRoot"
+/** Active LSP connection state, keyed by "language:projectRoot". */
 interface LSPConnection {
 	process: ChildProcess;
 	connection: ProtocolConnection;

@@ -11,6 +11,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+/** Configuration for a single Claude Code plugin source. */
 interface PluginConfig {
   source: string;
   name?: string;
@@ -19,16 +20,19 @@ interface PluginConfig {
   projects?: string[];
 }
 
+/** Top-level config file structure (cc-plugins.json). */
 interface Config {
   plugins: PluginConfig[];
 }
 
+/** Plugin manifest from .claude-plugin/plugin.json. */
 interface PluginManifest {
   name: string;
   version?: string;
   description?: string;
 }
 
+/** A command loaded from a plugin's commands/ directory. */
 interface LoadedCommand {
   name: string;
   description: string;
@@ -37,6 +41,7 @@ interface LoadedCommand {
   argumentHint?: string;
 }
 
+/** A skill loaded from a plugin's skills/ directory. */
 interface LoadedSkill {
   name: string;
   description: string;
@@ -44,6 +49,7 @@ interface LoadedSkill {
   filePath: string;
 }
 
+/** A fully loaded plugin with its commands and skills. */
 interface LoadedPlugin {
   name: string;
   version?: string;
@@ -53,6 +59,11 @@ interface LoadedPlugin {
   skills: LoadedSkill[];
 }
 
+/**
+ * Parse YAML frontmatter from markdown content.
+ * @param content - Raw markdown with optional --- delimited frontmatter
+ * @returns Parsed key-value frontmatter and remaining body
+ */
 function parseFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   if (!match) return { frontmatter: {}, body: content };
@@ -67,6 +78,11 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, string
   return { frontmatter, body: match[2] };
 }
 
+/**
+ * Resolve a plugin source path, expanding ~ and making absolute.
+ * @param source - Plugin source path (may start with ~)
+ * @returns Absolute path if it exists, null otherwise
+ */
 function resolvePluginPath(source: string): string | null {
   let resolved = source.startsWith("~")
     ? path.join(process.env.HOME ?? "", source.slice(1))
@@ -75,6 +91,11 @@ function resolvePluginPath(source: string): string | null {
   return fs.existsSync(resolved) ? resolved : null;
 }
 
+/**
+ * Load and parse a plugin's manifest file.
+ * @param pluginPath - Root directory of the plugin
+ * @returns Parsed manifest or null if not found/invalid
+ */
 function loadManifest(pluginPath: string): PluginManifest | null {
   const manifestPath = path.join(pluginPath, ".claude-plugin", "plugin.json");
   if (!fs.existsSync(manifestPath)) return null;
@@ -85,6 +106,11 @@ function loadManifest(pluginPath: string): PluginManifest | null {
   }
 }
 
+/**
+ * Load all markdown commands from a plugin's commands/ directory.
+ * @param pluginPath - Root directory of the plugin
+ * @returns Array of loaded command definitions
+ */
 function loadCommands(pluginPath: string): LoadedCommand[] {
   const commandsDir = path.join(pluginPath, "commands");
   if (!fs.existsSync(commandsDir)) return [];
@@ -105,6 +131,11 @@ function loadCommands(pluginPath: string): LoadedCommand[] {
   return commands;
 }
 
+/**
+ * Load all skills from a plugin's skills/ directory.
+ * @param pluginPath - Root directory of the plugin
+ * @returns Array of loaded skill definitions
+ */
 function loadSkills(pluginPath: string): LoadedSkill[] {
   const skillsDir = path.join(pluginPath, "skills");
   if (!fs.existsSync(skillsDir)) return [];
@@ -125,6 +156,11 @@ function loadSkills(pluginPath: string): LoadedSkill[] {
   return skills;
 }
 
+/**
+ * Load a complete plugin from its config, including manifest, commands, and skills.
+ * @param config - Plugin configuration entry
+ * @returns Loaded plugin or null if path/manifest is invalid
+ */
 function loadPlugin(config: PluginConfig): LoadedPlugin | null {
   const pluginPath = resolvePluginPath(config.source);
   if (!pluginPath) return null;
@@ -141,10 +177,20 @@ function loadPlugin(config: PluginConfig): LoadedPlugin | null {
   };
 }
 
+/**
+ * Replace $ARGUMENTS placeholders in command content with actual arguments.
+ * @param content - Template content with $ARGUMENTS placeholders
+ * @param args - User-provided arguments to substitute
+ * @returns Content with placeholders replaced
+ */
 function substituteArguments(content: string, args: string): string {
   return content.replace(/\$ARGUMENTS/g, args);
 }
 
+/**
+ * Register Claude Code plugin commands and skills as pi slash commands.
+ * @param pi - Extension API for registering commands and events
+ */
 export default function (pi: ExtensionAPI) {
   const configPath = path.join(__dirname, "cc-plugins.json");
 

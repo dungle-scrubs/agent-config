@@ -12,6 +12,7 @@ import * as fs from "node:fs";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { loadSkills, type Skill } from "@mariozechner/pi-coding-agent";
 
+/** Frontmatter parsed from a SKILL.md file. */
 interface SkillFrontmatter {
 	name?: string;
 	description?: string;

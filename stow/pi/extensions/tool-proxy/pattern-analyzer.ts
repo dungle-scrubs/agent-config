@@ -17,6 +17,7 @@ const LOG_FILE = path.join(LOG_DIR, "intents.jsonl");
 
 // === Analysis Types ===
 
+/** Frequently co-occurring tool combination with usage stats. */
 interface ToolCombo {
 	combo: string; // "app/tool" or "app/tool1 → app/tool2"
 	count: number;
@@ -24,6 +25,7 @@ interface ToolCombo {
 	successRate: number;
 }
 
+/** Recurring failure pattern across intents. */
 interface FailurePattern {
 	errorType: string;
 	count: number;
@@ -31,6 +33,7 @@ interface FailurePattern {
 	examples: string[]; // Sample error messages
 }
 
+/** Intent that required an unusually high number of tool calls. */
 interface HighHopIntent {
 	id: string;
 	prompt: string;
@@ -40,6 +43,7 @@ interface HighHopIntent {
 	toolsUsed: string[];
 }
 
+/** Complete analysis report with combos, inefficiencies, failures, and recommendations. */
 interface AnalysisReport {
 	totalIntents: number;
 	dateRange: { start: string; end: string };
@@ -62,6 +66,10 @@ interface AnalysisReport {
 
 // === Helpers ===
 
+/**
+ * Load all intent traces from the JSONL log file.
+ * @returns Array of parsed IntentTrace objects, skipping malformed lines
+ */
 function loadTraces(): IntentTrace[] {
 	if (!fs.existsSync(LOG_FILE)) {
 		return [];
@@ -79,6 +87,11 @@ function loadTraces(): IntentTrace[] {
 	}).filter((t): t is IntentTrace => t !== null);
 }
 
+/**
+ * Analyze intent traces to produce an optimization report.
+ * @param traces - Array of intent traces to analyze
+ * @returns Report with combos, inefficiencies, failures, and recommendations
+ */
 function analyzeTraces(traces: IntentTrace[]): AnalysisReport {
 	if (traces.length === 0) {
 		return {
@@ -223,6 +236,11 @@ function analyzeTraces(traces: IntentTrace[]): AnalysisReport {
 	};
 }
 
+/**
+ * Format an analysis report as human-readable text for the /patterns command.
+ * @param report - Analysis report to format
+ * @returns Formatted multi-line string
+ */
 function formatReport(report: AnalysisReport): string {
 	const lines: string[] = [];
 	

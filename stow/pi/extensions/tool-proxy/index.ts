@@ -25,6 +25,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONTEXT_PATH = path.join(__dirname, "context.md");
 let staticContext: string | null = null;
 
+/**
+ * Load and cache the static context.md file for system prompt injection.
+ * @returns Context markdown content, or empty string if file not found
+ */
 function getStaticContext(): string {
 	if (staticContext === null) {
 		try {
@@ -141,7 +145,7 @@ async function closeClient() {
 	}
 }
 
-// === Result Formatting ===
+/** Result shape returned by tool-proxy execute_tool calls. */
 type ToolProxyResult = {
 	content?: Array<{ type: string; text?: string }>;
 	isError?: boolean;

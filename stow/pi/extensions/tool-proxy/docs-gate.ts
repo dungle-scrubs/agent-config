@@ -20,6 +20,7 @@ const LIST_FILE = path.join(DOCS_DIR, "_list.md");
 
 // === Docs Cache Lookup ===
 
+/** A documentation entry tracked in the local cache list. */
 interface CachedDoc {
 	name: string;
 	url: string;

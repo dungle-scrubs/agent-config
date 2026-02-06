@@ -11,6 +11,7 @@ import * as path from "node:path";
 
 // === Types ===
 
+/** Complete trace of tool calls made to fulfill a single user prompt. */
 export interface IntentTrace {
 	id: string;
 	timestamp: number;
@@ -22,6 +23,7 @@ export interface IntentTrace {
 	metrics?: IntentMetrics;
 }
 
+/** Derived metrics computed from an IntentTrace at turn end. */
 export interface IntentMetrics {
 	totalHops: number;
 	discoveryHops: number; // discover_tools + get_app_context
@@ -32,6 +34,7 @@ export interface IntentMetrics {
 	toolsExecuted: string[]; // app/tool combinations
 }
 
+/** Individual tool call within an intent trace. */
 export interface ToolCallRecord {
 	index: number;
 	timestamp: number;
@@ -46,6 +49,7 @@ export interface ToolCallRecord {
 	linkedDiscoveryIndex?: number; // Which discover_tools led to this execute
 }
 
+/** Record of a failed tool call for error pattern analysis. */
 export interface FailureRecord {
 	toolIndex: number;
 	tool: string;
@@ -64,22 +68,34 @@ const LOG_FILE = path.join(LOG_DIR, "intents.jsonl");
 
 // === Helpers ===
 
+/** Create the log directory if it doesn't exist. */
 function ensureLogDir(): void {
 	if (!fs.existsSync(LOG_DIR)) {
 		fs.mkdirSync(LOG_DIR, { recursive: true });
 	}
 }
 
+/** Generate a unique intent trace ID with timestamp and random suffix. */
 function generateId(): string {
 	return `intent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Append a completed intent trace to the JSONL log file.
+ * @param trace - Finalized intent trace to persist
+ */
 function appendToLog(trace: IntentTrace): void {
 	ensureLogDir();
 	const line = JSON.stringify(trace) + "\n";
 	fs.appendFileSync(LOG_FILE, line);
 }
 
+/**
+ * Extract the target app name from a tool-proxy tool call.
+ * @param tool - Tool name (e.g., "execute_tool", "get_app_context")
+ * @param input - Tool call input parameters
+ * @returns App name if applicable, undefined otherwise
+ */
 function extractApp(tool: string, input: Record<string, unknown>): string | undefined {
 	if (tool === "execute_tool" || tool === "get_app_context") {
 		return input.app as string | undefined;
@@ -90,6 +106,11 @@ function extractApp(tool: string, input: Record<string, unknown>): string | unde
 	return undefined;
 }
 
+/**
+ * Classify a tool call as discovery, execution, or debug.
+ * @param tool - Tool name to classify
+ * @returns Category of the tool call
+ */
 function classifyTool(tool: string): "discovery" | "execution" | "debug" {
 	if (tool === "discover_tools" || tool === "get_app_context" || tool === "list_apps") {
 		return "discovery";
@@ -100,6 +121,11 @@ function classifyTool(tool: string): "discovery" | "execution" | "debug" {
 	return "debug";
 }
 
+/**
+ * Compute derived metrics from a completed intent trace.
+ * @param trace - Intent trace with all tool calls recorded
+ * @returns Aggregated metrics including hop counts, failures, and app usage
+ */
 function computeMetrics(trace: IntentTrace): IntentMetrics {
 	const metrics: IntentMetrics = {
 		totalHops: trace.toolCalls.length,
@@ -143,6 +169,11 @@ function computeMetrics(trace: IntentTrace): IntentMetrics {
 	return metrics;
 }
 
+/**
+ * Categorize an error message into a known error type.
+ * @param message - Error message to classify
+ * @returns Error category string (e.g., "env_var_missing", "auth", "timeout")
+ */
 function categorizeError(message?: string): string {
 	if (!message) return "unknown";
 	const lower = message.toLowerCase();
@@ -154,6 +185,11 @@ function categorizeError(message?: string): string {
 	return "other";
 }
 
+/**
+ * Determine the overall outcome of an intent trace based on recent tool results.
+ * @param trace - Intent trace to evaluate
+ * @returns Outcome: "success", "partial", "failed", or "unknown"
+ */
 function determineOutcome(trace: IntentTrace): IntentTrace["outcome"] {
 	if (trace.toolCalls.length === 0) return "unknown";
 
