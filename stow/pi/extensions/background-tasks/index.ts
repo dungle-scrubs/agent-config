@@ -62,6 +62,9 @@ const MAX_TASKS = 20; // Max concurrent/recent tasks
 // TUI reference captured at session_start for Loader in renderResult
 let tuiRef: TUI | null = null;
 
+// Persistent Loader instances per streaming task (avoids leaking intervals)
+const activeLoaders = new Map<string, InstanceType<typeof Loader>>();
+
 // Global task registry (exposed via globalThis for tasks extension to read)
 const tasks = new Map<string, BackgroundTask>();
 (globalThis as any).__piBackgroundTasks = tasks;
@@ -200,7 +203,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 					const output = task.output.join("");
 					onUpdate?.({
 						content: [{ type: "text", text: output || "(no output yet)" }],
-						details: {},
+						details: { taskId },
 					});
 				}
 			};
@@ -284,6 +287,13 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 				});
 			});
 
+			// Stop and clean up the persistent Loader for this task
+			const loader = activeLoaders.get(taskId);
+			if (loader) {
+				loader.stop();
+				activeLoaders.delete(taskId);
+			}
+
 			const output = task.output.join("");
 			const duration = formatDuration((task.endTime || Date.now()) - task.startTime);
 
@@ -305,34 +315,66 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		},
 
 		renderResult(result, { expanded, isPartial }, theme) {
-			const details = result.details as { fireAndForget?: boolean } | undefined;
+			const details = result.details as { fireAndForget?: boolean; taskId?: string } | undefined;
 
 			// Fire-and-forget: compact one-liner
 			if (details?.fireAndForget) {
 				return new Text(theme.fg("success", `⚙ Started (detached)`), 0, 0);
 			}
 
-			// While running: show orange spinner only
-			if (isPartial && tuiRef) {
-				const loader = new Loader(
-					tuiRef,
-					(s) => theme.fg("warning", s),
-					(s) => theme.fg("muted", s),
-					"Running...",
-				);
-				return loader;
-			}
+			const COLLAPSED_LINES = 10;
+			const EXPANDED_LINES = 50;
+
+			// Extract output (available during streaming via onUpdate and after completion)
+			const text = result.content[0];
+			const output = text?.type === "text" ? text.text : "";
+
+			// While running: show streamed output + loader spinner at bottom
 			if (isPartial) {
-				return new Text(theme.fg("warning", "Running..."), 0, 0);
+				const container = new Container();
+
+				if (output) {
+					const allLines = output.split("\n").filter((l: string) => l.length > 0);
+					const maxLines = COLLAPSED_LINES;
+					const truncated = allLines.length > maxLines;
+					const tail = truncated ? allLines.slice(-maxLines) : allLines;
+
+					let rendered = "";
+					if (truncated) {
+						rendered += theme.fg("dim", `... ${allLines.length - maxLines} more lines above`) + "\n";
+					}
+					for (let i = 0; i < tail.length; i++) {
+						rendered += theme.fg("muted", tail[i]);
+						if (i < tail.length - 1) rendered += "\n";
+					}
+					container.addChild(new Text(rendered, 0, 0));
+				}
+
+				// Reuse persistent Loader (one per task, avoids leaking intervals)
+				const tid = details?.taskId ?? "__bg_default";
+				let loader = activeLoaders.get(tid);
+				if (!loader && tuiRef) {
+					loader = new Loader(
+						tuiRef,
+						(s) => theme.fg("warning", s),
+						(s) => theme.fg("muted", s),
+						"Running...",
+					);
+					(loader as any).frames = ["◐", "◓", "◑", "◒"];
+					activeLoaders.set(tid, loader);
+				}
+				if (loader) {
+					container.addChild(loader);
+				} else {
+					container.addChild(new Text(theme.fg("bashMode", "Running..."), 0, 0));
+				}
+
+				return container;
 			}
 
 			// Completed: show output
-			const text = result.content[0];
-			const output = text?.type === "text" ? text.text : "";
 			if (!output) return new Text(theme.fg("dim", "(no output)"), 0, 0);
 
-			const COLLAPSED_LINES = 10;
-			const EXPANDED_LINES = 50;
 			const allLines = output.split("\n").filter((l: string) => l.length > 0);
 			const maxLines = expanded ? EXPANDED_LINES : COLLAPSED_LINES;
 			const truncated = allLines.length > maxLines;
