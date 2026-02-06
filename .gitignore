@@ -22,3 +22,8 @@ stow/pi/agent/auth.json
 
 # Logs
 *.log
+
+# Stow recursive symlinks
+stow/shared/agents/agents
+stow/shared/commands/commands
+stow/shared/skills/skills
