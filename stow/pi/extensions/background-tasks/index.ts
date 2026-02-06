@@ -180,10 +180,6 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			tasks.set(taskId, task);
 			cleanupOldTasks();
 
-			// Spinner frames for streaming indicator
-			const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-			let spinnerIdx = 0;
-
 			// Buffer output (and stream if not fire-and-forget)
 			const onData = (data: Buffer) => {
 				if (task.outputBytes < MAX_OUTPUT_BYTES) {
@@ -199,12 +195,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 				// Stream live updates to the TUI
 				if (!fireAndForget) {
 					const output = task.output.join("");
-					const duration = formatDuration(Date.now() - task.startTime);
-					const spinner = spinnerFrames[spinnerIdx % spinnerFrames.length];
-					spinnerIdx++;
 					onUpdate?.({
 						content: [{ type: "text", text: output || "(no output yet)" }],
-						details: { taskId, command: params.command, status: "running", duration, output, spinner },
+						details: {},
 					});
 				}
 			};
@@ -302,76 +295,9 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 			};
 		},
 
-		renderCall(args, theme) {
-			const cmd = args.command as string;
-			const bg = args.background ? theme.fg("dim", " (detached)") : "";
-			return new Text(theme.fg("toolTitle", theme.bold("$ ")) + theme.fg("toolTitle", cmd) + bg, 0, 0);
-		},
-
-		renderResult(result, { expanded, isPartial }, theme) {
-			const COLLAPSED_LINES = 10;
-			const EXPANDED_LINES = 50;
-
-			const details = result.details as {
-				taskId?: string;
-				command?: string;
-				status?: string;
-				duration?: string;
-				exitCode?: number | null;
-				output?: string;
-				fireAndForget?: boolean;
-				spinner?: string;
-			} | undefined;
-
-			// Fire-and-forget: compact one-liner
-			if (details?.fireAndForget) {
-				return new Text(theme.fg("success", `⚙ Started ${details.taskId ?? "?"} (detached)`), 0, 0);
-			}
-
-			const status = details?.status ?? (isPartial ? "running" : "unknown");
-			const duration = details?.duration ?? "";
-
-			// Output lines
-			const allLines = details?.output?.split("\n").filter((l) => l.length > 0) ?? [];
-			const maxLines = expanded ? EXPANDED_LINES : COLLAPSED_LINES;
-			const truncated = allLines.length > maxLines;
-			const tail = truncated ? allLines.slice(-maxLines) : allLines;
-
-			let text = "";
-
-			// Output
-			if (truncated) {
-				text += theme.fg("dim", `... ${allLines.length - maxLines} more lines above`) + "\n";
-			}
-			for (let i = 0; i < tail.length; i++) {
-				text += theme.fg("toolOutput", tail[i]);
-				if (i < tail.length - 1) text += "\n";
-			}
-
-			// Status footer
-			if (isPartial) {
-				const spinner = details?.spinner ?? "⠋";
-				if (text) text += "\n";
-				text += theme.fg("warning", `${spinner} Running... (${duration})`);
-			} else if (status === "completed") {
-				if (truncated) {
-					if (text) text += "\n";
-					text += theme.fg("dim", `... ${allLines.length - maxLines} more lines`) + ` ${keyHint("expandTools", "to expand")}`;
-				}
-			} else if (status === "failed" || status === "killed") {
-				const exitCode = details?.exitCode;
-				if (text) text += "\n";
-				text += theme.fg("error", `(exit ${exitCode ?? "?"})`);
-			}
-
-			if (text === "") {
-				text = isPartial
-					? theme.fg("warning", `${details?.spinner ?? "⠋"} Running... (${duration})`)
-					: theme.fg("dim", "(no output)");
-			}
-
-			return new Text(text, 0, 0);
-		},
+		// No renderCall/renderResult — use pi's default tool rendering.
+		// During streaming (isPartial), this shows the standard orange spinner.
+		// On completion, shows the raw output text.
 	});
 
 	// Tool: Get task output
