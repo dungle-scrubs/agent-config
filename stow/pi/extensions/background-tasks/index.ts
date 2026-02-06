@@ -299,7 +299,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 		renderCall(args, theme) {
 			const cmd = args.command as string;
 			const bg = args.background ? theme.fg("dim", " (detached)") : "";
-			return new Text(theme.fg("bashMode", theme.bold(`$ ${cmd}`)) + bg, 0, 0);
+			return new Text(theme.fg("toolTitle", theme.bold("$ ")) + theme.fg("toolTitle", cmd) + bg, 0, 0);
 		},
 
 		renderResult(result, { expanded, isPartial }, theme) {
@@ -318,7 +318,7 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			// Fire-and-forget: compact one-liner
 			if (details?.fireAndForget) {
-				return new Text(theme.fg("bashMode", `⚙ Started ${details.taskId ?? "?"} (detached)`), 0, 0);
+				return new Text(theme.fg("success", `⚙ Started ${details.taskId ?? "?"} (detached)`), 0, 0);
 			}
 
 			const status = details?.status ?? (isPartial ? "running" : "unknown");
@@ -334,28 +334,31 @@ export default function backgroundTasksExtension(pi: ExtensionAPI): void {
 
 			// Output
 			if (truncated) {
-				text += theme.fg("muted", `... ${allLines.length - maxLines} more lines above`) + "\n";
+				text += theme.fg("dim", `... ${allLines.length - maxLines} more lines above`) + "\n";
 			}
 			for (let i = 0; i < tail.length; i++) {
-				text += theme.fg("muted", tail[i]);
+				text += theme.fg("toolOutput", tail[i]);
 				if (i < tail.length - 1) text += "\n";
 			}
 
 			// Status footer
 			if (isPartial) {
-				text += `\n${theme.fg("bashMode", `Running... (${duration})`)}`;
+				if (text) text += "\n";
+				text += theme.fg("warning", `Running... (${duration})`);
 			} else if (status === "completed") {
 				if (truncated) {
-					text += `\n${theme.fg("muted", `... ${allLines.length - maxLines} more lines`)} ${keyHint("expandTools", "to expand")}`;
+					if (text) text += "\n";
+					text += theme.fg("dim", `... ${allLines.length - maxLines} more lines`) + ` ${keyHint("expandTools", "to expand")}`;
 				}
 			} else if (status === "failed" || status === "killed") {
 				const exitCode = details?.exitCode;
-				text += `\n${theme.fg("error", `(exit ${exitCode ?? "?"})`)}`;
+				if (text) text += "\n";
+				text += theme.fg("error", `(exit ${exitCode ?? "?"})`);
 			}
 
 			if (text === "") {
 				text = isPartial
-					? theme.fg("bashMode", `Running... (${duration})`)
+					? theme.fg("warning", `Running... (${duration})`)
 					: theme.fg("dim", "(no output)");
 			}
 
