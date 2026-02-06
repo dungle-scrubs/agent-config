@@ -1,6 +1,6 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const INIT_PROMPT = `Please analyze this codebase and create a CLAUDE.md file, which will be given to future instances of Claude Code to operate in this repository.
 
@@ -27,28 +27,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
  * @param pi - Extension API for registering commands
  */
 export default function (pi: ExtensionAPI) {
-  pi.registerCommand("init", {
-    description: "Initialize CLAUDE.md for the current project",
-    handler: async (args, ctx) => {
-      const cwd = ctx.cwd;
-      const claudeMdPath = path.join(cwd, "CLAUDE.md");
-      const agentsMdPath = path.join(cwd, "AGENTS.md");
+	pi.registerCommand("init", {
+		description: "Initialize CLAUDE.md for the current project",
+		handler: async (_args, ctx) => {
+			const cwd = ctx.cwd;
+			const claudeMdPath = path.join(cwd, "CLAUDE.md");
+			const agentsMdPath = path.join(cwd, "AGENTS.md");
 
-      // Check if either file exists
-      const claudeExists = fs.existsSync(claudeMdPath);
-      const agentsExists = fs.existsSync(agentsMdPath);
+			// Check if either file exists
+			const claudeExists = fs.existsSync(claudeMdPath);
+			const agentsExists = fs.existsSync(agentsMdPath);
 
-      let prompt = INIT_PROMPT;
+			const prompt = INIT_PROMPT;
 
-      if (claudeExists || agentsExists) {
-        const existingFile = claudeExists ? "CLAUDE.md" : "AGENTS.md";
-        ctx.ui.notify(`Found existing ${existingFile} - will suggest improvements`, "info");
-      } else {
-        ctx.ui.notify("Analyzing codebase to create CLAUDE.md...", "info");
-      }
+			if (claudeExists || agentsExists) {
+				const existingFile = claudeExists ? "CLAUDE.md" : "AGENTS.md";
+				ctx.ui.notify(`Found existing ${existingFile} - will suggest improvements`, "info");
+			} else {
+				ctx.ui.notify("Analyzing codebase to create CLAUDE.md...", "info");
+			}
 
-      // Send the prompt to the agent
-      pi.sendUserMessage(prompt);
-    },
-  });
+			// Send the prompt to the agent
+			pi.sendUserMessage(prompt);
+		},
+	});
 }

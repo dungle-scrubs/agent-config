@@ -37,6 +37,6 @@
 		}
 	},
 	"files": {
-		"includes": ["stow/pi/agent/extensions/**/*.ts", "stow/shared/**/*.ts", "stow/**/*.json"]
+		"includes": ["stow/pi/extensions/**/*.ts", "stow/shared/**/*.ts", "stow/**/*.json"]
 	}
 }

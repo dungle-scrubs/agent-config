@@ -142,7 +142,11 @@ async function runCommandHook(
 	const timeout = (handler.timeout ?? 600) * 1000;
 
 	return new Promise((resolve) => {
-		const proc = spawn(handler.command!, {
+		if (!handler.command) {
+			resolve({ ok: true });
+			return;
+		}
+		const proc = spawn(handler.command, {
 			cwd,
 			shell: true,
 			stdio: ["pipe", "pipe", "pipe"],
@@ -426,7 +430,7 @@ export default function (pi: ExtensionAPI) {
 				}
 
 				if (result.additionalContext) {
-					additionalContext = (additionalContext || "") + result.additionalContext + "\n";
+					additionalContext = `${(additionalContext || "") + result.additionalContext}\n`;
 				}
 
 				if (!result.ok && canBlock) {

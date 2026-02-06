@@ -19,10 +19,9 @@ import * as path from "node:path";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
 import { StringEnum } from "@mariozechner/pi-ai";
-import { type ExtensionAPI, getMarkdownTheme } from "@mariozechner/pi-coding-agent";
+import { type ExtensionAPI, getMarkdownTheme, parseFrontmatter } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
 
 // === Agent Discovery (inlined from agents.ts) ===
 
@@ -89,7 +88,10 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 			if (Array.isArray(frontmatter.skills)) {
 				skills = frontmatter.skills.map((s: string) => s.trim()).filter(Boolean);
 			} else if (typeof frontmatter.skills === "string") {
-				skills = frontmatter.skills.split(",").map((s: string) => s.trim()).filter(Boolean);
+				skills = frontmatter.skills
+					.split(",")
+					.map((s: string) => s.trim())
+					.filter(Boolean);
 			}
 		}
 
@@ -161,8 +163,6 @@ function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
 
 	return { agents: Array.from(agentMap.values()), projectAgentsDir };
 }
-
-
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;

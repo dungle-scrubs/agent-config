@@ -231,7 +231,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		fgRunning: any[],
 		bgRunning: any[],
 		maxTaskPreviewLen: number,
-		standalone: boolean
+		_standalone: boolean
 	): string[] {
 		if (fgRunning.length === 0 && bgRunning.length === 0) return [];
 
@@ -250,7 +250,8 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 				const ms = Date.now() - sub.startTime;
 				const secs = Math.floor(ms / 1000);
 				const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
-				const taskPreview = sub.task.length > maxTaskPreviewLen ? `${sub.task.slice(0, maxTaskPreviewLen - 3)}...` : sub.task;
+				const taskPreview =
+					sub.task.length > maxTaskPreviewLen ? `${sub.task.slice(0, maxTaskPreviewLen - 3)}...` : sub.task;
 				lines.push(
 					`${ctx.ui.theme.fg("muted", treeChar)} ${ctx.ui.theme.fg("warning", spinner)} ${ctx.ui.theme.fg("accent", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
 				);
@@ -275,7 +276,8 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 				const ms = Date.now() - sub.startTime;
 				const secs = Math.floor(ms / 1000);
 				const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
-				const taskPreview = sub.task.length > maxTaskPreviewLen ? `${sub.task.slice(0, maxTaskPreviewLen - 3)}...` : sub.task;
+				const taskPreview =
+					sub.task.length > maxTaskPreviewLen ? `${sub.task.slice(0, maxTaskPreviewLen - 3)}...` : sub.task;
 				lines.push(
 					`${ctx.ui.theme.fg("muted", indent + treeChar)} ${ctx.ui.theme.fg("success", spinner)} ${ctx.ui.theme.fg("accent", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
 				);
@@ -332,12 +334,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	/**
 	 * Merge two column arrays into side-by-side lines, with right column bottom-aligned
 	 */
-	function mergeSideBySide(
-		leftLines: string[],
-		rightLines: string[],
-		leftWidth: number,
-		separator: string
-	): string[] {
+	function mergeSideBySide(leftLines: string[], rightLines: string[], leftWidth: number, separator: string): string[] {
 		const maxRows = Math.max(leftLines.length, rightLines.length);
 		const result: string[] = [];
 

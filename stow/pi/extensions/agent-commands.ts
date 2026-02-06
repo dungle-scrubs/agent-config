@@ -92,13 +92,21 @@ function loadAgentsFromDir(dir: string): Agent[] {
 		const { frontmatter, body } = parseAgent(content);
 		if (!frontmatter.name || !frontmatter.description) continue;
 
-		const tools = typeof frontmatter.tools === "string"
-			? frontmatter.tools.split(",").map((t) => t.trim()).filter(Boolean)
-			: undefined;
+		const tools =
+			typeof frontmatter.tools === "string"
+				? frontmatter.tools
+						.split(",")
+						.map((t) => t.trim())
+						.filter(Boolean)
+				: undefined;
 
-		const skills = typeof frontmatter.skills === "string"
-			? frontmatter.skills.split(",").map((s) => s.trim()).filter(Boolean)
-			: undefined;
+		const skills =
+			typeof frontmatter.skills === "string"
+				? frontmatter.skills
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean)
+				: undefined;
 
 		agents.push({
 			name: frontmatter.name,

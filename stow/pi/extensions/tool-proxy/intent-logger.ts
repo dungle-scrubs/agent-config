@@ -5,9 +5,9 @@
  * representing everything done to fulfill a single user prompt.
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 // === Types ===
 
@@ -61,7 +61,7 @@ export interface FailureRecord {
 
 let currentTrace: IntentTrace | null = null;
 let lastDiscoveryIndex: number | null = null;
-let toolStartTimes: Map<string, number> = new Map();
+const toolStartTimes: Map<string, number> = new Map();
 
 const LOG_DIR = path.join(process.env.HOME || "~", ".pi", "logs", "tool-proxy");
 const LOG_FILE = path.join(LOG_DIR, "intents.jsonl");
@@ -86,7 +86,7 @@ function generateId(): string {
  */
 function appendToLog(trace: IntentTrace): void {
 	ensureLogDir();
-	const line = JSON.stringify(trace) + "\n";
+	const line = `${JSON.stringify(trace)}\n`;
 	fs.appendFileSync(LOG_FILE, line);
 }
 
@@ -208,7 +208,7 @@ function determineOutcome(trace: IntentTrace): IntentTrace["outcome"] {
 
 export default function intentLogger(pi: ExtensionAPI): void {
 	// Start new trace on turn start
-	pi.on("turn_start", async (event, ctx) => {
+	pi.on("turn_start", async (_event, ctx) => {
 		// Get the user prompt from the most recent user message
 		const entries = ctx.sessionManager.getBranch();
 		let userPrompt = "";
@@ -220,9 +220,7 @@ export default function intentLogger(pi: ExtensionAPI): void {
 				if (typeof content === "string") {
 					userPrompt = content;
 				} else if (Array.isArray(content)) {
-					const textPart = content.find((c: { type: string }) => c.type === "text") as
-						| { text: string }
-						| undefined;
+					const textPart = content.find((c: { type: string }) => c.type === "text") as { text: string } | undefined;
 					userPrompt = textPart?.text || "";
 				}
 				break;

@@ -13,56 +13,50 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 const SUMMARY_MARKER = "__summarized_tool_result__";
 
 /** Tools to summarize */
-const TOOLS_TO_SUMMARIZE = new Set([
-  "get_app_context",
-  "execute_tool",
-  "discover_tools",
-  "list_apps",
-  "execute_code",
-]);
+const TOOLS_TO_SUMMARIZE = new Set(["get_app_context", "execute_tool", "discover_tools", "list_apps", "execute_code"]);
 
 /**
  * Summarizes execute_tool results into a compact string.
  * Returns null if this is an error that should be shown in full.
  */
 function summarizeExecuteToolResult(fullText: string, input: { app?: string; tool?: string }): string | null {
-  const app = input?.app ?? "?";
-  const tool = input?.tool ?? "?";
-  const sizeKb = (fullText.length / 1024).toFixed(1);
+	const app = input?.app ?? "?";
+	const tool = input?.tool ?? "?";
+	const sizeKb = (fullText.length / 1024).toFixed(1);
 
-  // Don't summarize errors - show them in full
-  if (fullText.startsWith("[") && fullText.includes("_ERROR]")) {
-    return null;
-  }
+	// Don't summarize errors - show them in full
+	if (fullText.startsWith("[") && fullText.includes("_ERROR]")) {
+		return null;
+	}
 
-  // Try to parse as JSON to extract meaningful info
-  try {
-    const data = JSON.parse(fullText);
+	// Try to parse as JSON to extract meaningful info
+	try {
+		const data = JSON.parse(fullText);
 
-    // GitHub-style: { total_count, items: [...] }
-    if (typeof data.total_count === "number" && Array.isArray(data.items)) {
-      return `✓ ${app}/${tool} → ${data.items.length} of ${data.total_count} results (${sizeKb}KB)`;
-    }
+		// GitHub-style: { total_count, items: [...] }
+		if (typeof data.total_count === "number" && Array.isArray(data.items)) {
+			return `✓ ${app}/${tool} → ${data.items.length} of ${data.total_count} results (${sizeKb}KB)`;
+		}
 
-    // Array response
-    if (Array.isArray(data)) {
-      return `✓ ${app}/${tool} → ${data.length} items (${sizeKb}KB)`;
-    }
+		// Array response
+		if (Array.isArray(data)) {
+			return `✓ ${app}/${tool} → ${data.length} items (${sizeKb}KB)`;
+		}
 
-    // Object with id (single item)
-    if (data.id || data.name || data.title) {
-      const label = data.title || data.name || `#${data.id}`;
-      return `✓ ${app}/${tool} → "${label}" (${sizeKb}KB)`;
-    }
+		// Object with id (single item)
+		if (data.id || data.name || data.title) {
+			const label = data.title || data.name || `#${data.id}`;
+			return `✓ ${app}/${tool} → "${label}" (${sizeKb}KB)`;
+		}
 
-    // Generic object
-    const keys = Object.keys(data).length;
-    return `✓ ${app}/${tool} → object with ${keys} fields (${sizeKb}KB)`;
-  } catch {
-    // Not JSON, just show size
-    const lines = fullText.split("\n").length;
-    return `✓ ${app}/${tool} → ${lines} lines (${sizeKb}KB)`;
-  }
+		// Generic object
+		const keys = Object.keys(data).length;
+		return `✓ ${app}/${tool} → object with ${keys} fields (${sizeKb}KB)`;
+	} catch {
+		// Not JSON, just show size
+		const lines = fullText.split("\n").length;
+		return `✓ ${app}/${tool} → ${lines} lines (${sizeKb}KB)`;
+	}
 }
 
 /**
@@ -70,100 +64,98 @@ function summarizeExecuteToolResult(fullText: string, input: { app?: string; too
  * @param pi - The Pi extension API
  */
 export default function toolProxySummary(pi: ExtensionAPI): void {
-  // Step 1: Intercept tool results - store full text, display summary
-  pi.on("tool_result", async (event, _ctx) => {
-    if (!TOOLS_TO_SUMMARIZE.has(event.toolName)) return;
+	// Step 1: Intercept tool results - store full text, display summary
+	pi.on("tool_result", async (event, _ctx) => {
+		if (!TOOLS_TO_SUMMARIZE.has(event.toolName)) return;
 
-    const textContent = event.content.find((c) => c.type === "text");
-    if (!textContent || textContent.type !== "text") return;
+		const textContent = event.content.find((c) => c.type === "text");
+		if (!textContent || textContent.type !== "text") return;
 
-    const fullText = textContent.text;
-    if (fullText.length < 500) return; // Don't bother for small outputs
+		const fullText = textContent.text;
+		if (fullText.length < 500) return; // Don't bother for small outputs
 
-    let summary: string;
+		let summary: string;
 
-    const sizeKb = (fullText.length / 1024).toFixed(1);
+		const sizeKb = (fullText.length / 1024).toFixed(1);
 
-    switch (event.toolName) {
-      case "get_app_context": {
-        // Parse metadata from tool-proxy (format: <!-- tool-proxy:app=X,tools=N -->)
-        const metaMatch = fullText.match(/^<!-- tool-proxy:app=([^,]+),tools=(\d+) -->/);
-        if (metaMatch) {
-          const appName = metaMatch[1];
-          const toolCount = metaMatch[2];
-          summary = `📖 ${appName} (${toolCount} tools, ${sizeKb}KB)`;
-        } else {
-          // Fallback: parse from markdown (for backwards compatibility)
-          const appNameMatch = fullText.match(/^#\s*(.+?)(?:\s+MCP)?$/m);
-          const appName = appNameMatch?.[1] ?? "App";
-          const toolCount = (fullText.match(/- \*\*[\w_]+\*\*/g) || []).length;
-          summary = `📖 ${appName} (${toolCount} tools, ${sizeKb}KB)`;
-        }
-        break;
-      }
-      case "execute_tool": {
-        const result = summarizeExecuteToolResult(fullText, event.input as { app?: string; tool?: string });
-        if (result === null) return; // Don't summarize errors
-        summary = result;
-        break;
-      }
-      case "discover_tools": {
-        const toolMatches = fullText.match(/\d+\.\s+\*\*[\w-]+:[\w_]+\*\*/g) || [];
-        const query = (event.input as { query?: string })?.query ?? "";
-        summary = `🔍 "${query}" → ${toolMatches.length} tools found (${sizeKb}KB)`;
-        break;
-      }
-      case "list_apps": {
-        const appCount = (fullText.match(/^  • /gm) || []).length;
-        summary = `📋 ${appCount} apps available (${sizeKb}KB)`;
-        break;
-      }
-      case "execute_code": {
-        const lines = fullText.split("\n").length;
-        const hasError = fullText.toLowerCase().includes("error");
-        summary = hasError
-          ? `⚠️ code execution error (${lines} lines, ${sizeKb}KB)`
-          : `✓ code executed (${lines} lines, ${sizeKb}KB)`;
-        break;
-      }
-      default:
-        return; // Unknown tool, don't modify
-    }
+		switch (event.toolName) {
+			case "get_app_context": {
+				// Parse metadata from tool-proxy (format: <!-- tool-proxy:app=X,tools=N -->)
+				const metaMatch = fullText.match(/^<!-- tool-proxy:app=([^,]+),tools=(\d+) -->/);
+				if (metaMatch) {
+					const appName = metaMatch[1];
+					const toolCount = metaMatch[2];
+					summary = `📖 ${appName} (${toolCount} tools, ${sizeKb}KB)`;
+				} else {
+					// Fallback: parse from markdown (for backwards compatibility)
+					const appNameMatch = fullText.match(/^#\s*(.+?)(?:\s+MCP)?$/m);
+					const appName = appNameMatch?.[1] ?? "App";
+					const toolCount = (fullText.match(/- \*\*[\w_]+\*\*/g) || []).length;
+					summary = `📖 ${appName} (${toolCount} tools, ${sizeKb}KB)`;
+				}
+				break;
+			}
+			case "execute_tool": {
+				const result = summarizeExecuteToolResult(fullText, event.input as { app?: string; tool?: string });
+				if (result === null) return; // Don't summarize errors
+				summary = result;
+				break;
+			}
+			case "discover_tools": {
+				const toolMatches = fullText.match(/\d+\.\s+\*\*[\w-]+:[\w_]+\*\*/g) || [];
+				const query = (event.input as { query?: string })?.query ?? "";
+				summary = `🔍 "${query}" → ${toolMatches.length} tools found (${sizeKb}KB)`;
+				break;
+			}
+			case "list_apps": {
+				const appCount = (fullText.match(/^ {2}• /gm) || []).length;
+				summary = `📋 ${appCount} apps available (${sizeKb}KB)`;
+				break;
+			}
+			case "execute_code": {
+				const lines = fullText.split("\n").length;
+				const hasError = fullText.toLowerCase().includes("error");
+				summary = hasError
+					? `⚠️ code execution error (${lines} lines, ${sizeKb}KB)`
+					: `✓ code executed (${lines} lines, ${sizeKb}KB)`;
+				break;
+			}
+			default:
+				return; // Unknown tool, don't modify
+		}
 
-    return {
-      content: [{ type: "text", text: summary }],
-      details: {
-        ...(typeof event.details === "object" && event.details !== null ? event.details : {}),
-        [SUMMARY_MARKER]: true,
-        _fullText: fullText,
-      },
-      isError: event.isError,
-    };
-  });
+		return {
+			content: [{ type: "text", text: summary }],
+			details: {
+				...(typeof event.details === "object" && event.details !== null ? event.details : {}),
+				[SUMMARY_MARKER]: true,
+				_fullText: fullText,
+			},
+			isError: event.isError,
+		};
+	});
 
-  // Step 2: Before LLM call - restore full text in context
-  pi.on("context", async (event, _ctx) => {
-    const messages = event.messages;
-    let modified = false;
+	// Step 2: Before LLM call - restore full text in context
+	pi.on("context", async (event, _ctx) => {
+		const messages = event.messages;
+		let modified = false;
 
-    for (const msg of messages) {
-      if (msg.role !== "toolResult") continue;
+		for (const msg of messages) {
+			if (msg.role !== "toolResult") continue;
 
-      const details = msg.details as Record<string, unknown> | undefined;
-      if (!details?.[SUMMARY_MARKER] || !details._fullText) continue;
+			const details = msg.details as Record<string, unknown> | undefined;
+			if (!details?.[SUMMARY_MARKER] || !details._fullText) continue;
 
-      // Find and restore the text content
-      const textContent = msg.content.find(
-        (c): c is { type: "text"; text: string } => c.type === "text"
-      );
-      if (textContent) {
-        textContent.text = details._fullText as string;
-        modified = true;
-      }
-    }
+			// Find and restore the text content
+			const textContent = msg.content.find((c): c is { type: "text"; text: string } => c.type === "text");
+			if (textContent) {
+				textContent.text = details._fullText as string;
+				modified = true;
+			}
+		}
 
-    if (modified) {
-      return { messages };
-    }
-  });
+		if (modified) {
+			return { messages };
+		}
+	});
 }

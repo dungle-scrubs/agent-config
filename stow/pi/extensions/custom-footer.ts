@@ -58,12 +58,7 @@ function getGitState(forceRefresh = false): GitState | null {
 	const cwd = process.cwd();
 
 	// Return cached state if valid
-	if (
-		!forceRefresh &&
-		cachedGitState !== null &&
-		cachedCwd === cwd &&
-		now - lastGitCheck < GIT_CACHE_TTL
-	) {
+	if (!forceRefresh && cachedGitState !== null && cachedCwd === cwd && now - lastGitCheck < GIT_CACHE_TTL) {
 		return cachedGitState;
 	}
 
@@ -138,7 +133,10 @@ function formatTokens(count: number): string {
  * @returns Cleaned single-line string
  */
 function sanitize(text: string): string {
-	return text.replace(/[\r\n\t]/g, " ").replace(/ +/g, " ").trim();
+	return text
+		.replace(/[\r\n\t]/g, " ")
+		.replace(/ +/g, " ")
+		.trim();
 }
 
 /**
@@ -161,7 +159,7 @@ function alignLeftRight(left: string, right: string, width: number): string {
  */
 export default function customFooterExtension(pi: ExtensionAPI): void {
 	let extensionCtx: ExtensionContext | null = null;
-	let autoCompactEnabled = true;
+	const autoCompactEnabled = true;
 
 	// Invalidate git cache after file operations
 	pi.on("tool_result", async (event, _ctx) => {
@@ -211,9 +209,7 @@ export default function customFooterExtension(pi: ExtensionAPI): void {
 						.reverse()
 						.find(
 							(e) =>
-								e.type === "message" &&
-								e.message.role === "assistant" &&
-								(e.message as any).stopReason !== "aborted"
+								e.type === "message" && e.message.role === "assistant" && (e.message as any).stopReason !== "aborted"
 						);
 
 					let contextTokens = 0;

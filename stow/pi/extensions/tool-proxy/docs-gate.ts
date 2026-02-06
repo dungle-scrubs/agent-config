@@ -11,9 +11,9 @@
  * No pattern matching, no classification. The LLM already knows what it fetched.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const DOCS_DIR = path.join(process.env.HOME || "~", ".ai-docs");
 const LIST_FILE = path.join(DOCS_DIR, "_list.md");
@@ -66,9 +66,7 @@ function isUrlTracked(url: string): boolean {
 			try {
 				const docHost = new URL(doc.url).hostname.replace(/^www\./, "");
 				if (hostname === docHost) return true;
-			} catch {
-				continue;
-			}
+			} catch {}
 		}
 	} catch {
 		// Invalid URL
@@ -113,9 +111,7 @@ export default function docsGate(pi: ExtensionAPI): void {
 		// Already tracked — no reminder needed
 		if (isUrlTracked(url)) return;
 
-		const textContent = event.content.find(
-			(c): c is { type: "text"; text: string } => c.type === "text",
-		);
+		const textContent = event.content.find((c): c is { type: "text"; text: string } => c.type === "text");
 		if (!textContent) return;
 
 		const name = docNameFromUrl(url);

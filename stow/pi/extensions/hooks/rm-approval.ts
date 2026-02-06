@@ -36,7 +36,8 @@ const SAFE_DIRECTORIES = new Set([
 ]);
 
 /** Pattern matching any rm with recursive + force flags. */
-const RM_DANGEROUS_PATTERN = /\brm\s+.*(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r|--recursive\s+--force|--force\s+--recursive|-r\s+.*-f|-f\s+.*-r)/i;
+const RM_DANGEROUS_PATTERN =
+	/\brm\s+.*(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r|--recursive\s+--force|--force\s+--recursive|-r\s+.*-f|-f\s+.*-r)/i;
 
 /**
  * Extracts target paths from an rm command string.
@@ -98,7 +99,7 @@ export default function rmApproval(pi: ExtensionAPI): void {
 
 		const ok = await ctx.ui.confirm(
 			"⚠️ Destructive rm",
-			`Allow this command?\n\n  ${command}\n\nTargets: ${targets.join(", ") || "(unknown)"}`,
+			`Allow this command?\n\n  ${command}\n\nTargets: ${targets.join(", ") || "(unknown)"}`
 		);
 
 		if (!ok) {

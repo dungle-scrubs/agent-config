@@ -5,20 +5,19 @@
  * Includes status indicator and output summarization.
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Type } from "@sinclair/typebox";
-import * as fs from "node:fs";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import toolProxyStatus from "./status.js";
-import toolProxySummary from "./summary.js";
+import docsGate from "./docs-gate.js";
 import intentLogger from "./intent-logger.js";
 import patternAnalyzer from "./pattern-analyzer.js";
-import docsGate from "./docs-gate.js";
+import toolProxyStatus from "./status.js";
+import toolProxySummary from "./summary.js";
 
 // === Static Context ===
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -174,7 +173,10 @@ function summarizeDocsResult(text: string, tool: string): string | null {
 			case "search_docs": {
 				if (typeof data === "string") return `🔍 ${data}`;
 				if (!Array.isArray(data) || data.length === 0) return "🔍 No matches";
-				const totalMatches = data.reduce((sum: number, d: { matches?: unknown[] }) => sum + (d.matches?.length ?? 0), 0);
+				const totalMatches = data.reduce(
+					(sum: number, d: { matches?: unknown[] }) => sum + (d.matches?.length ?? 0),
+					0
+				);
 				const docNames = data.map((d: { doc?: string }) => d.doc).join(", ");
 				return `🔍 ${totalMatches} match${totalMatches === 1 ? "" : "es"} across ${data.length} doc${data.length === 1 ? "" : "s"}: ${docNames}`;
 			}
@@ -388,7 +390,7 @@ WORKFLOW: discover_tools -> execute_tool`,
 			const summary = textContent?.text ?? "✓ done";
 
 			if (expanded && details?._fullText) {
-				return new Text(summary + "\n\n" + theme.fg("dim", details._fullText), 0, 0);
+				return new Text(`${summary}\n\n${theme.fg("dim", details._fullText)}`, 0, 0);
 			}
 
 			return new Text(theme.fg("success", summary), 0, 0);
@@ -451,7 +453,7 @@ WHEN TO USE:
 
 			if (expanded) {
 				// Show full content when expanded (Ctrl+O)
-				return new Text(summary + "\n\n" + theme.fg("dim", fullText), 0, 0);
+				return new Text(`${summary}\n\n${theme.fg("dim", fullText)}`, 0, 0);
 			}
 
 			return new Text(summary, 0, 0);
@@ -492,7 +494,7 @@ WHEN TO USE:
 			const summary = textContent?.text ?? "✓ done";
 
 			if (expanded && details?._fullText) {
-				return new Text(summary + "\n\n" + theme.fg("dim", details._fullText), 0, 0);
+				return new Text(`${summary}\n\n${theme.fg("dim", details._fullText)}`, 0, 0);
 			}
 
 			return new Text(theme.fg("success", summary), 0, 0);
@@ -539,7 +541,7 @@ WHEN TO USE:
 			const summary = textContent?.text ?? "✓ done";
 
 			if (expanded && details?._fullText) {
-				return new Text(summary + "\n\n" + theme.fg("dim", details._fullText), 0, 0);
+				return new Text(`${summary}\n\n${theme.fg("dim", details._fullText)}`, 0, 0);
 			}
 
 			return new Text(theme.fg("success", summary), 0, 0);
@@ -611,7 +613,7 @@ SANDBOX: Runs in isolated container with network access only to allowed domains.
 			const summary = textContent?.text ?? "✓ done";
 
 			if (expanded && details?._fullText) {
-				return new Text(summary + "\n\n" + theme.fg("dim", details._fullText), 0, 0);
+				return new Text(`${summary}\n\n${theme.fg("dim", details._fullText)}`, 0, 0);
 			}
 
 			return new Text(theme.fg("success", summary), 0, 0);
@@ -642,7 +644,7 @@ SANDBOX: Runs in isolated container with network access only to allowed domains.
 		if (!context) return;
 
 		return {
-			systemPrompt: event.systemPrompt + "\n\n" + context,
+			systemPrompt: `${event.systemPrompt}\n\n${context}`,
 		};
 	});
 

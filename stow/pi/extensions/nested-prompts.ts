@@ -142,7 +142,7 @@ export default function (pi: ExtensionAPI) {
 				let content: string;
 				try {
 					content = fs.readFileSync(prompt.filePath, "utf-8");
-				} catch (err) {
+				} catch (_err) {
 					cmdCtx.ui.notify(`Failed to read prompt: ${commandName}`, "error");
 					return;
 				}
