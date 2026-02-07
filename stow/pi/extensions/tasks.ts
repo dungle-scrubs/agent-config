@@ -64,6 +64,8 @@ interface Task {
 	subject: string;
 	/** Detailed description — survives context compaction. */
 	description?: string;
+	/** Present continuous form shown in spinner when in_progress (e.g. "Running tests"). */
+	activeForm?: string;
 	status: TaskStatus;
 	/** Task IDs this task blocks (forward deps). */
 	blocks: string[];
@@ -73,6 +75,8 @@ interface Task {
 	comments: TaskComment[];
 	/** Agent that claimed this task (passive, no enforcement yet). */
 	owner?: string;
+	/** Arbitrary key-value metadata. Set a key to null to delete it. */
+	metadata?: Record<string, unknown>;
 	createdAt: number;
 	completedAt?: number;
 }
@@ -469,8 +473,8 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 					textStyle = (s) => s;
 			}
 
-			const title =
-				task.subject.length > maxTitleLen ? `${task.subject.substring(0, maxTitleLen - 3)}...` : task.subject;
+			const label = task.status === "in_progress" && task.activeForm ? task.activeForm : task.subject;
+			const title = label.length > maxTitleLen ? `${label.substring(0, maxTitleLen - 3)}...` : label;
 			lines.push(`${ctx.ui.theme.fg("muted", treeChar)} ${icon} ${textStyle(title)}`);
 		}
 
@@ -776,15 +780,20 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	 * @param description - Optional detailed description
 	 * @returns The created task
 	 */
-	function addTask(subject: string, description?: string): Task {
+	function addTask(
+		subject: string,
+		opts?: { description?: string; activeForm?: string; metadata?: Record<string, unknown> }
+	): Task {
 		const task: Task = {
 			id: nextTaskId(state),
 			subject,
-			description,
+			description: opts?.description,
+			activeForm: opts?.activeForm,
 			status: "pending",
 			blocks: [],
 			blockedBy: [],
 			comments: [],
+			metadata: opts?.metadata,
 			createdAt: Date.now(),
 		};
 		state.tasks.push(task);
@@ -962,7 +971,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 						ctx.ui.notify("Usage: /tasks add <task subject>", "error");
 						return;
 					}
-					const task = addTask(rest);
+					const task = addTask(rest, {});
 					updateWidget(ctx);
 					persistState();
 					ctx.ui.notify(`Added #${task.id}: ${task.subject}`, "info");
@@ -1095,11 +1104,13 @@ IMPORTANT RULES:
 - Complete tasks as you finish them (auto-advances to next)
 - Tasks auto-clear 2 seconds after all complete
 - Use addComment to leave context for future sessions (why something was done, what was tried)
-- Use addBlockedBy/addBlocks to set dependency chains between tasks`,
+- Use addBlockedBy/addBlocks to set dependency chains between tasks
+- Use activeForm for present continuous spinner text (e.g. subject "Run tests" → activeForm "Running tests")
+- Use get action with index to view full task details including metadata, comments, and timestamps`,
 		parameters: Type.Object({
 			action: Type.String({
 				description:
-					"Action: clear (remove all), complete_all (mark all done), list (show current), add (new task), complete (mark one done), update (modify task)",
+					"Action: clear (remove all), complete_all (mark all done), list (show current), add (new task), complete (mark one done), update (modify task), get (view full task details by index)",
 			}),
 			task: Type.Optional(
 				Type.String({
@@ -1115,6 +1126,22 @@ IMPORTANT RULES:
 				Type.String({
 					description: "Detailed task description (for add or update action)",
 				})
+			),
+			activeForm: Type.Optional(
+				Type.String({
+					description:
+						'Present continuous form shown in spinner when task is in_progress (e.g. "Running tests"). Falls back to subject if not set.',
+				})
+			),
+			metadata: Type.Optional(
+				Type.Object(
+					{},
+					{
+						description:
+							"Arbitrary key-value metadata to attach to a task (for add or update). Set a key to null to delete it.",
+						additionalProperties: true,
+					}
+				)
 			),
 			index: Type.Optional(
 				Type.Number({
@@ -1150,6 +1177,8 @@ IMPORTANT RULES:
 				task?: string;
 				tasks?: string[];
 				description?: string;
+				activeForm?: string;
+				metadata?: Record<string, unknown>;
 				index?: number;
 				indices?: number[];
 				addBlocks?: string[];
@@ -1191,7 +1220,11 @@ IMPORTANT RULES:
 					if (!params.task) {
 						return { details: {}, content: [{ type: "text", text: "Missing task subject" }] };
 					}
-					const newTask = addTask(params.task, params.description);
+					const newTask = addTask(params.task, {
+						description: params.description,
+						activeForm: params.activeForm,
+						metadata: params.metadata,
+					});
 					// Auto-start if first task
 					if (state.tasks.length === 1) {
 						updateTaskStatus(newTask.id, "in_progress");
@@ -1211,6 +1244,19 @@ IMPORTANT RULES:
 					if (params.description !== undefined) {
 						taskToUpdate.description = params.description;
 						changes.push("description");
+					}
+					if (params.activeForm !== undefined) {
+						taskToUpdate.activeForm = params.activeForm;
+						changes.push("activeForm");
+					}
+					if (params.metadata !== undefined) {
+						const merged = { ...taskToUpdate.metadata };
+						for (const [k, v] of Object.entries(params.metadata)) {
+							if (v === null) delete merged[k];
+							else merged[k] = v;
+						}
+						taskToUpdate.metadata = Object.keys(merged).length > 0 ? merged : undefined;
+						changes.push("metadata");
 					}
 					if (params.addBlocks || params.addBlockedBy) {
 						updateTaskDeps(taskToUpdate.id, params.addBlocks, params.addBlockedBy);
@@ -1323,6 +1369,31 @@ IMPORTANT RULES:
 						})
 						.join("\n");
 					return { details: {}, content: [{ type: "text", text: list }] };
+				}
+				case "get": {
+					const getIdx = (params.index || 1) - 1;
+					if (getIdx < 0 || getIdx >= state.tasks.length) {
+						return { details: {}, content: [{ type: "text", text: "Invalid task number" }] };
+					}
+					const t = state.tasks[getIdx];
+					const lines = [`# Task #${t.id}: ${t.subject}`, `Status: ${t.status}`];
+					if (t.activeForm) lines.push(`Active form: ${t.activeForm}`);
+					if (t.description) lines.push(`Description: ${t.description}`);
+					if (t.owner) lines.push(`Owner: ${t.owner}`);
+					if (t.blocks.length > 0) lines.push(`Blocks: ${t.blocks.join(", ")}`);
+					if (t.blockedBy.length > 0) lines.push(`Blocked by: ${t.blockedBy.join(", ")}`);
+					if (t.metadata && Object.keys(t.metadata).length > 0) {
+						lines.push(`Metadata: ${JSON.stringify(t.metadata)}`);
+					}
+					lines.push(`Created: ${new Date(t.createdAt).toISOString()}`);
+					if (t.completedAt) lines.push(`Completed: ${new Date(t.completedAt).toISOString()}`);
+					if (t.comments.length > 0) {
+						lines.push(`\nComments (${t.comments.length}):`);
+						for (const c of t.comments) {
+							lines.push(`  [${new Date(c.timestamp).toISOString()}] ${c.author}: ${c.content}`);
+						}
+					}
+					return { details: {}, content: [{ type: "text", text: lines.join("\n") }] };
 				}
 				default:
 					return { details: {}, content: [{ type: "text", text: `Unknown action: ${params.action}` }] };
@@ -1447,11 +1518,13 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 				id: (t.id as string) ?? String(state.nextId++),
 				subject: (t.subject as string) ?? (t.title as string) ?? "Untitled",
 				description: t.description as string | undefined,
+				activeForm: t.activeForm as string | undefined,
 				status: (t.status as TaskStatus) ?? "pending",
 				blocks: (t.blocks as string[]) ?? [],
 				blockedBy: (t.blockedBy as string[]) ?? (t.dependencies as string[]) ?? [],
 				comments: (t.comments as TaskComment[]) ?? [],
 				owner: t.owner as string | undefined,
+				metadata: t.metadata as Record<string, unknown> | undefined,
 				createdAt: (t.createdAt as number) ?? Date.now(),
 				completedAt: t.completedAt as number | undefined,
 			}));
