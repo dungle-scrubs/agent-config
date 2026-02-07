@@ -24,6 +24,7 @@ import {
 	readdirSync,
 	readFileSync,
 	renameSync,
+	rmdirSync,
 	unlinkSync,
 	watch,
 	writeFileSync,
@@ -196,6 +197,49 @@ class TaskListStore {
 	}
 
 	/**
+	 * Acquire a directory-based lock for the task store. Returns a release function.
+	 * Uses mkdirSync which is atomic on POSIX — fails if dir exists.
+	 * Spins with exponential backoff up to ~1s, then proceeds unlocked.
+	 * @returns Release function to call when done
+	 */
+	lock(): () => void {
+		if (!this.dirPath) return () => {};
+		const lockDir = join(this.dirPath, ".lock");
+		let acquired = false;
+		for (let attempt = 0; attempt < 10; attempt++) {
+			try {
+				mkdirSync(lockDir);
+				acquired = true;
+				break;
+			} catch {
+				// Lock held — spin with exponential backoff
+				const waitMs = Math.min(10 * 2 ** attempt, 200);
+				const start = Date.now();
+				while (Date.now() - start < waitMs) {
+					// busy-wait (synchronous lock needed for synchronous callers)
+				}
+			}
+		}
+		if (!acquired) {
+			// Stale lock? Force remove and retry once
+			try {
+				rmdirSync(lockDir);
+				mkdirSync(lockDir);
+				acquired = true;
+			} catch {
+				// Proceed unlocked — best effort
+			}
+		}
+		return () => {
+			try {
+				rmdirSync(lockDir);
+			} catch {
+				// Already released
+			}
+		};
+	}
+
+	/**
 	 * Save a single task to its own file, atomically (write tmp + rename).
 	 * @param task - Task to persist
 	 */
@@ -205,21 +249,22 @@ class TaskListStore {
 		const filename = `${task.id}.json`;
 		const filePath = join(this.dirPath, filename);
 		const tmpPath = join(this.dirPath, `.${filename}.${randomUUID().slice(0, 8)}.tmp`);
+		const unlock = this.lock();
 
 		try {
 			this.recentWrites.add(filename);
 			writeFileSync(tmpPath, JSON.stringify(task, null, 2), "utf-8");
 			renameSync(tmpPath, filePath);
-			// Clear after a short delay to allow fs.watch event to fire and be ignored
 			setTimeout(() => this.recentWrites.delete(filename), 200);
 		} catch {
 			this.recentWrites.delete(filename);
-			// Best-effort direct write
 			try {
 				writeFileSync(filePath, JSON.stringify(task, null, 2), "utf-8");
 			} catch {
 				// Silent — state still in session entries
 			}
+		} finally {
+			unlock();
 		}
 	}
 
@@ -231,12 +276,15 @@ class TaskListStore {
 		if (!this.dirPath) return;
 		const filename = `${taskId}.json`;
 		const filePath = join(this.dirPath, filename);
+		const unlock = this.lock();
 		try {
 			this.recentWrites.add(filename);
 			if (existsSync(filePath)) unlinkSync(filePath);
 			setTimeout(() => this.recentWrites.delete(filename), 200);
 		} catch {
 			this.recentWrites.delete(filename);
+		} finally {
+			unlock();
 		}
 	}
 
@@ -421,10 +469,7 @@ function escapeRegex(str: string): string {
  * @param pi - Extension API for registering tools, commands, and event handlers
  */
 export default function tasksExtension(pi: ExtensionAPI): void {
-	// Skip in subagent workers - they don't need task management UI
-	if (process.env.PI_IS_SUBAGENT === "1") {
-		return;
-	}
+	const isSubagent = process.env.PI_IS_SUBAGENT === "1";
 	const state: TasksState = {
 		tasks: [],
 		visible: true,
@@ -619,6 +664,8 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	}
 
 	function updateWidget(ctx: ExtensionContext): void {
+		// Subagents have no UI — skip all widget rendering
+		if (isSubagent) return;
 		// Check for foreground (sync) and background subagents
 		const fgSubagentsMap = globalThis.__piRunningSubagents;
 		const bgSubagentsMap = globalThis.__piBackgroundSubagents;
@@ -723,7 +770,14 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 	// ── Store instance (shared or null) ─────────────────────────────
 
-	const store = new TaskListStore(process.env.PI_TASK_LIST_ID ?? null);
+	// Auto-generate a shared task list ID so subagents can coordinate.
+	// User can override with PI_TASK_LIST_ID env var.
+	const taskListId = process.env.PI_TASK_LIST_ID ?? (isSubagent ? null : `session-${randomUUID().slice(0, 8)}`);
+	if (taskListId && !process.env.PI_TASK_LIST_ID) {
+		// Set on process.env so child subagents inherit it automatically
+		process.env.PI_TASK_LIST_ID = taskListId;
+	}
+	const store = new TaskListStore(taskListId);
 
 	// ── Persistence ─────────────────────────────────────────────────
 
@@ -942,149 +996,151 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		ctx.ui.notify(state.visible ? "Task list shown" : "Task list hidden", "info");
 	}
 
-	// Register /tasks command
-	pi.registerCommand("tasks", {
-		description: "Manage tasks - list, add, complete, delete, clear",
-		handler: async (args, ctx) => {
-			const parts = args.trim().split(/\s+/);
-			const subcommand = parts[0]?.toLowerCase() || "list";
-			const rest = parts.slice(1).join(" ");
+	// Register /tasks command (main process only — subagents have no interactive UI)
+	if (!isSubagent)
+		pi.registerCommand("tasks", {
+			description: "Manage tasks - list, add, complete, delete, clear",
+			handler: async (args, ctx) => {
+				const parts = args.trim().split(/\s+/);
+				const subcommand = parts[0]?.toLowerCase() || "list";
+				const rest = parts.slice(1).join(" ");
 
-			switch (subcommand) {
-				case "list":
-				case "show": {
-					if (state.tasks.length === 0) {
-						ctx.ui.notify("No tasks. Ask Claude to create a plan or use /tasks add <task>", "info");
-						return;
+				switch (subcommand) {
+					case "list":
+					case "show": {
+						if (state.tasks.length === 0) {
+							ctx.ui.notify("No tasks. Ask Claude to create a plan or use /tasks add <task>", "info");
+							return;
+						}
+						const list = state.tasks
+							.map((t) => {
+								const icon = t.status === "completed" ? "✓" : t.status === "in_progress" ? "▣" : "☐";
+								const blocked = t.blockedBy.length > 0 ? ` (blocked by: ${t.blockedBy.join(", ")})` : "";
+								const comments = t.comments.length > 0 ? ` 💬${t.comments.length}` : "";
+								return `${t.id}. ${icon} ${t.subject}${blocked}${comments}`;
+							})
+							.join("\n");
+						const mode = store.isShared ? ` [shared: ${process.env.PI_TASK_LIST_ID}]` : " [session-only]";
+						ctx.ui.notify(`Tasks${mode}:\n${list}`, "info");
+						break;
 					}
-					const list = state.tasks
-						.map((t) => {
-							const icon = t.status === "completed" ? "✓" : t.status === "in_progress" ? "▣" : "☐";
-							const blocked = t.blockedBy.length > 0 ? ` (blocked by: ${t.blockedBy.join(", ")})` : "";
-							const comments = t.comments.length > 0 ? ` 💬${t.comments.length}` : "";
-							return `${t.id}. ${icon} ${t.subject}${blocked}${comments}`;
-						})
-						.join("\n");
-					const mode = store.isShared ? ` [shared: ${process.env.PI_TASK_LIST_ID}]` : " [session-only]";
-					ctx.ui.notify(`Tasks${mode}:\n${list}`, "info");
-					break;
-				}
 
-				case "add": {
-					if (!rest) {
-						ctx.ui.notify("Usage: /tasks add <task subject>", "error");
-						return;
-					}
-					const task = addTask(rest, {});
-					updateWidget(ctx);
-					persistState();
-					ctx.ui.notify(`Added #${task.id}: ${task.subject}`, "info");
-					break;
-				}
-
-				case "complete":
-				case "done": {
-					const num = Number.parseInt(rest, 10);
-					if (Number.isNaN(num) || num < 1 || num > state.tasks.length) {
-						ctx.ui.notify(`Usage: /tasks complete <number> (1-${state.tasks.length})`, "error");
-						return;
-					}
-					const task = state.tasks[num - 1];
-					if (updateTaskStatus(task.id, "completed")) {
+					case "add": {
+						if (!rest) {
+							ctx.ui.notify("Usage: /tasks add <task subject>", "error");
+							return;
+						}
+						const task = addTask(rest, {});
 						updateWidget(ctx);
 						persistState();
-						ctx.ui.notify(`Completed: ${task.subject}`, "info");
-					} else {
-						ctx.ui.notify("Cannot complete task - blocked by unfinished dependencies", "error");
+						ctx.ui.notify(`Added #${task.id}: ${task.subject}`, "info");
+						break;
 					}
-					break;
-				}
 
-				case "start":
-				case "active": {
-					const num = Number.parseInt(rest, 10);
-					if (Number.isNaN(num) || num < 1 || num > state.tasks.length) {
-						ctx.ui.notify(`Usage: /tasks start <number> (1-${state.tasks.length})`, "error");
-						return;
+					case "complete":
+					case "done": {
+						const num = Number.parseInt(rest, 10);
+						if (Number.isNaN(num) || num < 1 || num > state.tasks.length) {
+							ctx.ui.notify(`Usage: /tasks complete <number> (1-${state.tasks.length})`, "error");
+							return;
+						}
+						const task = state.tasks[num - 1];
+						if (updateTaskStatus(task.id, "completed")) {
+							updateWidget(ctx);
+							persistState();
+							ctx.ui.notify(`Completed: ${task.subject}`, "info");
+						} else {
+							ctx.ui.notify("Cannot complete task - blocked by unfinished dependencies", "error");
+						}
+						break;
 					}
-					const task = state.tasks[num - 1];
-					updateTaskStatus(task.id, "in_progress");
-					updateWidget(ctx);
-					persistState();
-					ctx.ui.notify(`Started: ${task.subject}`, "info");
-					break;
-				}
 
-				case "delete":
-				case "remove": {
-					const num = Number.parseInt(rest, 10);
-					if (Number.isNaN(num) || num < 1 || num > state.tasks.length) {
-						ctx.ui.notify(`Usage: /tasks delete <number> (1-${state.tasks.length})`, "error");
-						return;
+					case "start":
+					case "active": {
+						const num = Number.parseInt(rest, 10);
+						if (Number.isNaN(num) || num < 1 || num > state.tasks.length) {
+							ctx.ui.notify(`Usage: /tasks start <number> (1-${state.tasks.length})`, "error");
+							return;
+						}
+						const task = state.tasks[num - 1];
+						updateTaskStatus(task.id, "in_progress");
+						updateWidget(ctx);
+						persistState();
+						ctx.ui.notify(`Started: ${task.subject}`, "info");
+						break;
 					}
-					const task = state.tasks[num - 1];
-					deleteTask(task.id);
-					updateWidget(ctx);
-					persistState();
-					ctx.ui.notify(`Deleted: ${task.subject}`, "info");
-					break;
-				}
 
-				case "id": {
-					if (rest) {
+					case "delete":
+					case "remove": {
+						const num = Number.parseInt(rest, 10);
+						if (Number.isNaN(num) || num < 1 || num > state.tasks.length) {
+							ctx.ui.notify(`Usage: /tasks delete <number> (1-${state.tasks.length})`, "error");
+							return;
+						}
+						const task = state.tasks[num - 1];
+						deleteTask(task.id);
+						updateWidget(ctx);
+						persistState();
+						ctx.ui.notify(`Deleted: ${task.subject}`, "info");
+						break;
+					}
+
+					case "id": {
+						if (rest) {
+							ctx.ui.notify(
+								`Set PI_TASK_LIST_ID=${rest} in your shell to enable shared tasks.\n` +
+									"Then restart Pi. Runtime switching is not supported.",
+								"info"
+							);
+						} else {
+							const current = store.isShared ? process.env.PI_TASK_LIST_ID : "(none — session-only)";
+							const path = store.path ?? "N/A";
+							ctx.ui.notify(`Task list ID: ${current}\nPath: ${path}`, "info");
+						}
+						break;
+					}
+
+					case "clear": {
+						const count = state.tasks.length;
+						clearTasks();
+						updateWidget(ctx);
+						persistState();
+						ctx.ui.notify(`Cleared ${count} tasks`, "info");
+						break;
+					}
+
+					case "toggle":
+					case "hide": {
+						toggleVisibility(ctx);
+						break;
+					}
+
+					default:
 						ctx.ui.notify(
-							`Set PI_TASK_LIST_ID=${rest} in your shell to enable shared tasks.\n` +
-								"Then restart Pi. Runtime switching is not supported.",
+							"Usage: /tasks [list|add|complete|start|delete|clear|toggle|id]\n" +
+								"  list          - Show all tasks\n" +
+								"  add <task>    - Add a new task\n" +
+								"  complete <n>  - Mark task n as completed\n" +
+								"  start <n>     - Mark task n as in-progress\n" +
+								"  delete <n>    - Delete task n\n" +
+								"  clear         - Clear all tasks\n" +
+								"  toggle        - Show/hide task widget\n" +
+								"  id [name]     - Show or set task list ID",
 							"info"
 						);
-					} else {
-						const current = store.isShared ? process.env.PI_TASK_LIST_ID : "(none — session-only)";
-						const path = store.path ?? "N/A";
-						ctx.ui.notify(`Task list ID: ${current}\nPath: ${path}`, "info");
-					}
-					break;
 				}
-
-				case "clear": {
-					const count = state.tasks.length;
-					clearTasks();
-					updateWidget(ctx);
-					persistState();
-					ctx.ui.notify(`Cleared ${count} tasks`, "info");
-					break;
-				}
-
-				case "toggle":
-				case "hide": {
-					toggleVisibility(ctx);
-					break;
-				}
-
-				default:
-					ctx.ui.notify(
-						"Usage: /tasks [list|add|complete|start|delete|clear|toggle|id]\n" +
-							"  list          - Show all tasks\n" +
-							"  add <task>    - Add a new task\n" +
-							"  complete <n>  - Mark task n as completed\n" +
-							"  start <n>     - Mark task n as in-progress\n" +
-							"  delete <n>    - Delete task n\n" +
-							"  clear         - Clear all tasks\n" +
-							"  toggle        - Show/hide task widget\n" +
-							"  id [name]     - Show or set task list ID",
-						"info"
-					);
-			}
-		},
-	});
+			},
+		});
 
 	// Note: /todos is provided by plan-mode extension, so we don't register it here
 	// Use /tasks list instead
 
 	// Register Ctrl+Shift+T shortcut for task list (Ctrl+T is built-in)
-	pi.registerShortcut(Key.ctrlShift("t"), {
-		description: "Toggle task list visibility",
-		handler: async (ctx) => toggleVisibility(ctx),
-	});
+	if (!isSubagent)
+		pi.registerShortcut(Key.ctrlShift("t"), {
+			description: "Toggle task list visibility",
+			handler: async (ctx) => toggleVisibility(ctx),
+		});
 
 	// Tool for agent to manage tasks programmatically
 	pi.registerTool({
@@ -1131,7 +1187,7 @@ EXAMPLES:
 		parameters: Type.Object({
 			action: Type.String({
 				description:
-					"Action: clear (remove all), complete_all (mark all done), list (show current), add (new task), complete (mark one done), update (modify task), get (view full task details by index)",
+					"Action: clear (remove all), complete_all (mark all done), list (show current), add (new task), complete (mark one done), update (modify task), get (view full task details by index), claim (set owner with busy-check)",
 			}),
 			task: Type.Optional(
 				Type.String({
@@ -1180,6 +1236,11 @@ EXAMPLES:
 					description: "Multiple task numbers to complete at once (1-indexed)",
 				})
 			),
+			owner: Type.Optional(
+				Type.String({
+					description: "Agent name to set as task owner (for claim/update action)",
+				})
+			),
 			addBlocks: Type.Optional(
 				Type.Array(Type.String(), {
 					description: "Task IDs that this task blocks (for update action)",
@@ -1207,6 +1268,7 @@ EXAMPLES:
 				activeForm?: string;
 				metadata?: Record<string, unknown>;
 				status?: string;
+				owner?: string;
 				index?: number;
 				indices?: number[];
 				addBlocks?: string[];
@@ -1441,6 +1503,80 @@ EXAMPLES:
 					}
 					return { details: {}, content: [{ type: "text", text: lines.join("\n") }] };
 				}
+				case "claim": {
+					if (!params.owner) {
+						return { details: {}, content: [{ type: "text", text: "Missing owner for claim action" }] };
+					}
+					const claimIdx = (params.index || 1) - 1;
+					if (claimIdx < 0 || claimIdx >= state.tasks.length) {
+						return { details: {}, content: [{ type: "text", text: "Invalid task number" }] };
+					}
+					const taskToClaim = state.tasks[claimIdx];
+
+					// Can't claim completed/deleted tasks
+					if (taskToClaim.status === "completed" || taskToClaim.status === "deleted") {
+						return {
+							details: {},
+							content: [{ type: "text", text: `Cannot claim #${taskToClaim.id}: already ${taskToClaim.status}` }],
+						};
+					}
+
+					// Already claimed by someone else
+					if (taskToClaim.owner && taskToClaim.owner !== params.owner) {
+						return {
+							details: {},
+							content: [
+								{
+									type: "text",
+									text: `Cannot claim #${taskToClaim.id}: already owned by ${taskToClaim.owner}`,
+								},
+							],
+						};
+					}
+
+					// Busy-check: agent can't claim if they already own an in_progress task
+					const busyTask = state.tasks.find(
+						(t) => t.owner === params.owner && t.status === "in_progress" && t.id !== taskToClaim.id
+					);
+					if (busyTask) {
+						return {
+							details: {},
+							content: [
+								{
+									type: "text",
+									text: `Cannot claim #${taskToClaim.id}: ${params.owner} is busy with #${busyTask.id} (${busyTask.subject})`,
+								},
+							],
+						};
+					}
+
+					// Check blockedBy deps
+					const unmetDeps = taskToClaim.blockedBy.filter((depId) => {
+						const dep = state.tasks.find((t) => t.id === depId);
+						return dep && dep.status !== "completed";
+					});
+					if (unmetDeps.length > 0) {
+						return {
+							details: {},
+							content: [
+								{ type: "text", text: `Cannot claim #${taskToClaim.id}: blocked by tasks ${unmetDeps.join(", ")}` },
+							],
+						};
+					}
+
+					// Claim successful — set owner and move to in_progress
+					taskToClaim.owner = params.owner;
+					updateTaskStatus(taskToClaim.id, "in_progress");
+					persistTask(taskToClaim);
+					updateWidget(ctx);
+					persistState();
+					return {
+						details: {},
+						content: [
+							{ type: "text", text: `Claimed #${taskToClaim.id}: ${taskToClaim.subject} (owner: ${params.owner})` },
+						],
+					};
+				}
 				default:
 					return { details: {}, content: [{ type: "text", text: `Unknown action: ${params.action}` }] };
 			}
@@ -1533,10 +1669,9 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 		};
 	});
 
-	// Interval for updating background subagents/tasks display
-	// Store interval on globalThis so we can clear it across reloads
+	// Interval for updating background subagents/tasks display (main process only)
 	const G = globalThis;
-	if (G.__piTasksInterval) {
+	if (!isSubagent && G.__piTasksInterval) {
 		clearInterval(G.__piTasksInterval);
 	}
 	let lastBgCount = 0;
@@ -1588,32 +1723,34 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 
 		updateWidget(ctx);
 
-		// Start interval to animate subagents and background tasks
-		if (G.__piTasksInterval) clearInterval(G.__piTasksInterval);
-		G.__piTasksInterval = setInterval(() => {
-			const fgSubagents = globalThis.__piRunningSubagents;
-			const bgSubagents = globalThis.__piBackgroundSubagents;
-			const bgTasks = globalThis.__piBackgroundTasks;
+		// Start interval to animate subagents and background tasks (main process only)
+		if (!isSubagent) {
+			if (G.__piTasksInterval) clearInterval(G.__piTasksInterval);
+			G.__piTasksInterval = setInterval(() => {
+				const fgSubagents = globalThis.__piRunningSubagents;
+				const bgSubagents = globalThis.__piBackgroundSubagents;
+				const bgTasks = globalThis.__piBackgroundTasks;
 
-			const fgRunning = fgSubagents ? fgSubagents.size : 0;
-			const bgRunning = bgSubagents
-				? ([...bgSubagents.values()] as unknown as SubagentView[]).filter((s) => s.status === "running").length
-				: 0;
-			const bgTaskRunning = bgTasks
-				? ([...bgTasks.values()] as unknown as BgTaskView[]).filter((t) => t.status === "running").length
-				: 0;
-			const hasActiveTask = state.tasks.some((t) => t.status === "in_progress");
+				const fgRunning = fgSubagents ? fgSubagents.size : 0;
+				const bgRunning = bgSubagents
+					? ([...bgSubagents.values()] as unknown as SubagentView[]).filter((s) => s.status === "running").length
+					: 0;
+				const bgTaskRunning = bgTasks
+					? ([...bgTasks.values()] as unknown as BgTaskView[]).filter((t) => t.status === "running").length
+					: 0;
+				const hasActiveTask = state.tasks.some((t) => t.status === "in_progress");
 
-			const hasRunning = fgRunning > 0 || bgRunning > 0 || bgTaskRunning > 0 || hasActiveTask;
+				const hasRunning = fgRunning > 0 || bgRunning > 0 || bgTaskRunning > 0 || hasActiveTask;
 
-			// Update on every tick when background items running (for animation), or when count changes
-			if (hasRunning || bgRunning !== lastBgCount || bgTaskRunning !== lastBgTaskCount) {
-				spinnerFrame++;
-				lastBgCount = bgRunning;
-				lastBgTaskCount = bgTaskRunning;
-				updateWidget(ctx);
-			}
-		}, 200); // Faster interval for smoother animation
+				// Update on every tick when background items running (for animation), or when count changes
+				if (hasRunning || bgRunning !== lastBgCount || bgTaskRunning !== lastBgTaskCount) {
+					spinnerFrame++;
+					lastBgCount = bgRunning;
+					lastBgTaskCount = bgTaskRunning;
+					updateWidget(ctx);
+				}
+			}, 200); // Faster interval for smoother animation
+		} // end !isSubagent interval guard
 	});
 
 	// Cleanup on session end
