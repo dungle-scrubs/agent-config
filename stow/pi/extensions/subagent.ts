@@ -567,13 +567,14 @@ function writePromptToTempFile(agentName: string, prompt: string): { dir: string
 }
 
 /**
- * Spawn a subagent as a detached background process.
+ * Spawn a background subagent process.
  * @param defaultCwd - Default working directory
  * @param agents - Available agent configurations
  * @param agentName - Name of the agent to spawn
  * @param task - Task to delegate
  * @param cwd - Optional working directory override
  * @param piEvents - Optional event emitter for subagent lifecycle events
+ * @param session - Optional session file path for persistent teammates
  * @returns Background subagent ID, or null if agent not found
  */
 function spawnBackgroundSubagent(
@@ -582,13 +583,16 @@ function spawnBackgroundSubagent(
 	agentName: string,
 	task: string,
 	cwd: string | undefined,
-	piEvents?: ExtensionAPI["events"]
+	piEvents?: ExtensionAPI["events"],
+	session?: string
 ): string | null {
 	const agent = agents.find((a) => a.name === agentName);
 	if (!agent) return null;
 	const effectiveCwd = cwd ?? defaultCwd;
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session"];
+	const args: string[] = session
+		? ["--mode", "json", "-p", "--session", session]
+		: ["--mode", "json", "-p", "--no-session"];
 	if (agent.model) args.push("--model", agent.model);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 	if (agent.skills && agent.skills.length > 0) {
@@ -766,6 +770,13 @@ type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
  * @param agents - Available agent configurations
  * @param agentName - Name of the agent to run
  * @param task - Task to delegate
+ * @param cwd - Optional working directory override
+ * @param step - Optional step index (for chain mode)
+ * @param signal - Optional abort signal
+ * @param onUpdate - Optional callback for streaming partial results
+ * @param makeDetails - Factory for SubagentDetails
+ * @param piEvents - Optional event emitter for lifecycle events
+ * @param session - Optional session file path for persistent teammates
  */
 async function runSingleAgent(
 	defaultCwd: string,
@@ -777,7 +788,8 @@ async function runSingleAgent(
 	signal: AbortSignal | undefined,
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
-	piEvents?: ExtensionAPI["events"]
+	piEvents?: ExtensionAPI["events"],
+	session?: string
 ): Promise<SingleResult> {
 	const agent = agents.find((a) => a.name === agentName);
 	const taskId = `fg_${generateId()}`;
@@ -805,7 +817,9 @@ async function runSingleAgent(
 		background: false,
 	} satisfies SubagentStartEvent);
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session"];
+	const args: string[] = session
+		? ["--mode", "json", "-p", "--session", session]
+		: ["--mode", "json", "-p", "--no-session"];
 	if (agent.model) args.push("--model", agent.model);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 	if (agent.skills && agent.skills.length > 0) {
@@ -1008,6 +1022,14 @@ const SubagentParams = Type.Object({
 		Type.Boolean({
 			description: "Run in background, return immediately. Use subagent_status to check.",
 			default: false,
+		})
+	),
+	session: Type.Optional(
+		Type.String({
+			description:
+				"Session file path for persistent teammates. Creates or continues a session. " +
+				"On first call, creates the session file. On subsequent calls, resumes the conversation " +
+				"with full history. Use for long-lived agents that need multiple interactions.",
 		})
 	),
 });
@@ -1342,7 +1364,15 @@ WHEN NOT TO USE SUBAGENTS:
 			if (params.agent && params.task) {
 				// Background mode for single agent: spawn without awaiting
 				if (params.background) {
-					const id = spawnBackgroundSubagent(ctx.cwd, agents, params.agent, params.task, params.cwd, pi.events);
+					const id = spawnBackgroundSubagent(
+						ctx.cwd,
+						agents,
+						params.agent,
+						params.task,
+						params.cwd,
+						pi.events,
+						params.session
+					);
 					if (id) {
 						return {
 							content: [
@@ -1395,7 +1425,8 @@ WHEN NOT TO USE SUBAGENTS:
 						emitSingleUpdate();
 					},
 					makeDetails("single"),
-					pi.events
+					pi.events,
+					params.session
 				);
 
 				if (singleSpinnerInterval) {

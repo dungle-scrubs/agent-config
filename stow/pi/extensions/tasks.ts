@@ -619,7 +619,9 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 			const ms = Date.now() - task.startTime;
 			const secs = Math.floor(ms / 1000);
 			const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
-			const cmd = task.command.length > maxCmdLen ? `${task.command.slice(0, maxCmdLen - 3)}...` : task.command;
+			// Collapse newlines and truncate to max length
+			const flatCmd = task.command.replace(/\n/g, " ↵ ");
+			const cmd = flatCmd.length > maxCmdLen ? `${flatCmd.slice(0, maxCmdLen - 3)}...` : flatCmd;
 			lines.push(
 				`${ctx.ui.theme.fg("muted", treeChar)} ${ctx.ui.theme.fg("accent", "●")} ${cmd} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
 			);
@@ -644,9 +646,23 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	}
 
 	/**
-	 * Merge two column arrays into side-by-side lines, with right column bottom-aligned
+	 * Merge two column arrays into side-by-side lines, with right column bottom-aligned.
+	 * Both columns are truncated to their allotted widths to prevent overflow.
+	 * @param leftLines - Lines for the left column
+	 * @param rightLines - Lines for the right column
+	 * @param leftWidth - Max visible width for left column
+	 * @param separator - Separator string between columns
+	 * @param totalWidth - Total terminal width (for right column truncation)
 	 */
-	function mergeSideBySide(leftLines: string[], rightLines: string[], leftWidth: number, separator: string): string[] {
+	function mergeSideBySide(
+		leftLines: string[],
+		rightLines: string[],
+		leftWidth: number,
+		separator: string,
+		totalWidth: number
+	): string[] {
+		const separatorWidth = visibleWidth(separator);
+		const rightWidth = totalWidth - leftWidth - separatorWidth;
 		const maxRows = Math.max(leftLines.length, rightLines.length);
 		const result: string[] = [];
 
@@ -656,7 +672,10 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		for (let i = 0; i < maxRows; i++) {
 			const left = leftLines[i] ?? "";
 			const rightIndex = i - rightPadding;
-			const right = rightIndex >= 0 ? (rightLines[rightIndex] ?? "") : "";
+			const rawRight = rightIndex >= 0 ? (rightLines[rightIndex] ?? "") : "";
+			// Truncate right column to prevent overflow
+			const right =
+				rightWidth > 0 && visibleWidth(rawRight) > rightWidth ? truncateToWidth(rawRight, rightWidth, "") : rawRight;
 			result.push(padToWidth(left, leftWidth) + separator + right);
 		}
 
@@ -735,7 +754,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 						rightLines.push(...renderBgBashLines(ctx, maxCmdLen));
 					}
 
-					return mergeSideBySide(taskLines, rightLines, columnWidth, separator);
+					return mergeSideBySide(taskLines, rightLines, columnWidth, separator, width);
 				}
 
 				// Stacked layout (narrow terminal or only one section)
