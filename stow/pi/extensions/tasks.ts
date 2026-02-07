@@ -1,29 +1,83 @@
 /**
  * Tasks Extension for Pi
  *
- * Claude Code-style task management with:
+ * Task management with cross-session persistence, inspired by Claude Code's
+ * Beads-derived task system:
  * - Three states: pending (☐), in-progress (◉), completed (☑)
- * - Dependency tracking between tasks
- * - Persistence across compactions
+ * - Bidirectional dependency tracking (blocks/blockedBy)
+ * - Comments for cross-session handoff context
+ * - Cross-session persistence via PI_TASK_LIST_ID env var
+ * - Multi-session coordination via fs.watch
+ * - One file per task (avoids write conflicts)
  * - Status widget with dynamic sizing
- * - Ctrl+T to toggle visibility
+ * - Ctrl+Shift+T to toggle visibility
  * - /tasks command to view/manage
- * - /todos command for compatibility
  *
  * NOTE: This extension only runs in the main Pi process, not in subagent workers.
  */
 
+import { randomUUID } from "node:crypto";
+import type { FSWatcher } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	unlinkSync,
+	watch,
+	writeFileSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Key, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
+// ── Constants ────────────────────────────────────────────────────────────────
+
+/** Directory root for shared task list files. */
+const TASKS_DIR = join(homedir(), ".pi", "tasks");
+
 // Minimum width for side-by-side layout (tasks left, subagents right)
 const MIN_SIDE_BY_SIDE_WIDTH = 120;
 
+// ── Task Types ───────────────────────────────────────────────────────────────
+
 /** Lifecycle state of a task. */
 type TaskStatus = "pending" | "in_progress" | "completed";
+
+/** A comment attached to a task for cross-session context. */
+interface TaskComment {
+	author: string;
+	content: string;
+	timestamp: number;
+}
+
+/** A single task with subject, description, bidirectional deps, and comments. */
+interface Task {
+	/** Sequential integer ID as string ("1", "2", ...). */
+	id: string;
+	/** Short summary (was "title" in old schema). */
+	subject: string;
+	/** Detailed description — survives context compaction. */
+	description?: string;
+	status: TaskStatus;
+	/** Task IDs this task blocks (forward deps). */
+	blocks: string[];
+	/** Task IDs that block this task (reverse deps). */
+	blockedBy: string[];
+	/** Audit trail / handoff context — persists across sessions. */
+	comments: TaskComment[];
+	/** Agent that claimed this task (passive, no enforcement yet). */
+	owner?: string;
+	createdAt: number;
+	completedAt?: number;
+}
+
+// ── View Types (read from globalThis) ────────────────────────────────────────
 
 /** Shape of background task entries read from globalThis.__piBackgroundTasks */
 interface BgTaskView {
@@ -42,21 +96,205 @@ interface SubagentView {
 	startTime: number;
 }
 
-/** A single task with status, dependencies, and timestamps. */
-interface Task {
-	id: string;
-	title: string;
-	status: TaskStatus;
-	dependencies: string[]; // IDs of tasks this depends on
-	createdAt: number;
-	completedAt?: number;
-}
+// ── Widget State ─────────────────────────────────────────────────────────────
 
 /** Complete tasks widget state including visibility and active task tracking. */
 interface TasksState {
 	tasks: Task[];
 	visible: boolean;
 	activeTaskId: string | null;
+	/** Next sequential ID counter. */
+	nextId: number;
+}
+
+// ── TaskListStore ────────────────────────────────────────────────────────────
+
+/**
+ * Persistent, file-backed task store for cross-session sharing.
+ *
+ * When PI_TASK_LIST_ID is set, each task is stored as a separate JSON file
+ * in ~/.pi/tasks/<list-id>/<task-id>.json. fs.watch on the directory detects
+ * changes from other sessions.
+ *
+ * Without the env var, this store is inactive and the extension falls back
+ * to session-entry persistence.
+ */
+class TaskListStore {
+	private readonly dirPath: string | null;
+	private watcher: FSWatcher | null = null;
+	private onChange: (() => void) | null = null;
+	/** Debounce timer to coalesce rapid file change events. */
+	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Set of filenames we just wrote — ignore their fs.watch events. */
+	private readonly recentWrites = new Set<string>();
+
+	/**
+	 * @param listId - Task list identifier from PI_TASK_LIST_ID, or null for session-only mode
+	 */
+	constructor(listId: string | null) {
+		if (listId) {
+			const safeId = listId.replace(/[^a-zA-Z0-9._-]/g, "_");
+			this.dirPath = join(TASKS_DIR, safeId);
+			mkdirSync(this.dirPath, { recursive: true });
+		} else {
+			this.dirPath = null;
+		}
+	}
+
+	/** @returns Whether this store is in shared (file-backed) mode. */
+	get isShared(): boolean {
+		return this.dirPath !== null;
+	}
+
+	/** @returns The resolved directory path, or null in session-only mode. */
+	get path(): string | null {
+		return this.dirPath;
+	}
+
+	/**
+	 * Load all tasks from the shared directory.
+	 * @returns Array of tasks sorted by ID, or null if not in shared mode.
+	 */
+	loadAll(): Task[] | null {
+		if (!this.dirPath) return null;
+		if (!existsSync(this.dirPath)) return [];
+
+		const tasks: Task[] = [];
+		try {
+			const files = readdirSync(this.dirPath).filter((f) => f.endsWith(".json"));
+			for (const file of files) {
+				try {
+					const raw = readFileSync(join(this.dirPath, file), "utf-8");
+					const parsed = JSON.parse(raw) as Record<string, unknown>;
+					// Migrate old schema: title → subject, dependencies → blockedBy
+					if (parsed.title && !parsed.subject) {
+						parsed.subject = parsed.title;
+						parsed.title = undefined;
+					}
+					if (parsed.dependencies && !parsed.blockedBy) {
+						parsed.blockedBy = parsed.dependencies;
+						parsed.dependencies = undefined;
+					}
+					const task = parsed as unknown as Task;
+					task.blocks = task.blocks ?? [];
+					task.blockedBy = task.blockedBy ?? [];
+					task.comments = task.comments ?? [];
+					tasks.push(task);
+				} catch {
+					// Skip corrupt files
+				}
+			}
+		} catch {
+			return [];
+		}
+
+		return tasks.sort((a, b) => Number(a.id) - Number(b.id));
+	}
+
+	/**
+	 * Save a single task to its own file, atomically (write tmp + rename).
+	 * @param task - Task to persist
+	 */
+	saveTask(task: Task): void {
+		if (!this.dirPath) return;
+
+		const filename = `${task.id}.json`;
+		const filePath = join(this.dirPath, filename);
+		const tmpPath = join(this.dirPath, `.${filename}.${randomUUID().slice(0, 8)}.tmp`);
+
+		try {
+			this.recentWrites.add(filename);
+			writeFileSync(tmpPath, JSON.stringify(task, null, 2), "utf-8");
+			renameSync(tmpPath, filePath);
+			// Clear after a short delay to allow fs.watch event to fire and be ignored
+			setTimeout(() => this.recentWrites.delete(filename), 200);
+		} catch {
+			this.recentWrites.delete(filename);
+			// Best-effort direct write
+			try {
+				writeFileSync(filePath, JSON.stringify(task, null, 2), "utf-8");
+			} catch {
+				// Silent — state still in session entries
+			}
+		}
+	}
+
+	/**
+	 * Delete a task file.
+	 * @param taskId - ID of the task to remove
+	 */
+	deleteTask(taskId: string): void {
+		if (!this.dirPath) return;
+		const filename = `${taskId}.json`;
+		const filePath = join(this.dirPath, filename);
+		try {
+			this.recentWrites.add(filename);
+			if (existsSync(filePath)) unlinkSync(filePath);
+			setTimeout(() => this.recentWrites.delete(filename), 200);
+		} catch {
+			this.recentWrites.delete(filename);
+		}
+	}
+
+	/**
+	 * Delete all task files in the directory.
+	 */
+	deleteAll(): void {
+		if (!this.dirPath) return;
+		try {
+			const files = readdirSync(this.dirPath).filter((f) => f.endsWith(".json"));
+			for (const file of files) {
+				this.recentWrites.add(file);
+				try {
+					unlinkSync(join(this.dirPath, file));
+				} catch {
+					// skip
+				}
+				setTimeout(() => this.recentWrites.delete(file), 200);
+			}
+		} catch {
+			// skip
+		}
+	}
+
+	/**
+	 * Start watching the task directory for external changes.
+	 * @param callback - Invoked when another session modifies a task file
+	 */
+	watch(callback: () => void): void {
+		if (!this.dirPath) return;
+
+		this.onChange = callback;
+
+		try {
+			this.watcher = watch(this.dirPath, (_, changedFile) => {
+				if (!changedFile?.endsWith(".json")) return;
+				if (this.recentWrites.has(changedFile)) return;
+
+				// Debounce: coalesce rapid events
+				if (this.debounceTimer) clearTimeout(this.debounceTimer);
+				this.debounceTimer = setTimeout(() => {
+					this.debounceTimer = null;
+					this.onChange?.();
+				}, 150);
+			});
+		} catch {
+			// fs.watch can fail on some filesystems — degrade gracefully
+		}
+	}
+
+	/** Stop watching and clean up resources. */
+	close(): void {
+		if (this.debounceTimer) {
+			clearTimeout(this.debounceTimer);
+			this.debounceTimer = null;
+		}
+		if (this.watcher) {
+			this.watcher.close();
+			this.watcher = null;
+		}
+		this.onChange = null;
+	}
 }
 
 /**
@@ -81,11 +319,14 @@ function getTextContent(message: AssistantMessage): string {
 }
 
 /**
- * Generates a unique task ID using timestamp and random string.
- * @returns Unique task identifier
+ * Generates the next sequential task ID from the state counter.
+ * @param state - Current tasks state (mutates nextId)
+ * @returns Sequential ID string ("1", "2", ...)
  */
-function generateTaskId(): string {
-	return `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+function nextTaskId(state: TasksState): string {
+	const id = String(state.nextId);
+	state.nextId++;
+	return id;
 }
 
 // Extract tasks from text (numbered lists, checkboxes, etc.)
@@ -145,10 +386,10 @@ function findCompletedTasks(text: string, tasks: Task[]): string[] {
 		const patterns = [
 			new RegExp(`\\[DONE:?\\s*${task.id}\\]`, "i"),
 			new RegExp(`\\[COMPLETE:?\\s*${task.id}\\]`, "i"),
-			new RegExp(`✓\\s*${escapeRegex(task.title.substring(0, 30))}`, "i"),
-			new RegExp(`completed:?\\s*${escapeRegex(task.title.substring(0, 30))}`, "i"),
-			new RegExp(`done:?\\s*${escapeRegex(task.title.substring(0, 30))}`, "i"),
-			new RegExp(`\\[x\\]\\s*${escapeRegex(task.title.substring(0, 30))}`, "i"),
+			new RegExp(`✓\\s*${escapeRegex(task.subject.substring(0, 30))}`, "i"),
+			new RegExp(`completed:?\\s*${escapeRegex(task.subject.substring(0, 30))}`, "i"),
+			new RegExp(`done:?\\s*${escapeRegex(task.subject.substring(0, 30))}`, "i"),
+			new RegExp(`\\[x\\]\\s*${escapeRegex(task.subject.substring(0, 30))}`, "i"),
 		];
 
 		for (const pattern of patterns) {
@@ -184,6 +425,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		tasks: [],
 		visible: true,
 		activeTaskId: null,
+		nextId: 1,
 	};
 
 	// Render the task widget
@@ -227,7 +469,8 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 					textStyle = (s) => s;
 			}
 
-			const title = task.title.length > maxTitleLen ? `${task.title.substring(0, maxTitleLen - 3)}...` : task.title;
+			const title =
+				task.subject.length > maxTitleLen ? `${task.subject.substring(0, maxTitleLen - 3)}...` : task.subject;
 			lines.push(`${ctx.ui.theme.fg("muted", treeChar)} ${icon} ${textStyle(title)}`);
 		}
 
@@ -441,9 +684,10 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 				}
 
 				// Stacked layout (narrow terminal or only one section)
-				const maxTitleLen = 50;
-				const maxTaskPreviewLen = 35;
-				const maxCmdLen = 40;
+				// "├─ ◐ " prefix = 5 visible chars, leave room for width
+				const maxTitleLen = Math.max(10, width - 5);
+				const maxTaskPreviewLen = Math.max(15, width - 25);
+				const maxCmdLen = Math.max(15, width - 15);
 				const lines: string[] = [];
 
 				if (hasTasks) {
@@ -460,7 +704,8 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 					lines.push(...renderBgBashLines(ctx, maxCmdLen));
 				}
 
-				return lines;
+				// Safety net: truncate all lines to terminal width
+				return lines.map((line) => (visibleWidth(line) > width ? truncateToWidth(line, width, "") : line));
 			},
 			invalidate(): void {
 				// No caching needed - state is external
@@ -468,36 +713,98 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		}));
 	}
 
-	// Persist state
+	// ── Store instance (shared or null) ─────────────────────────────
+
+	const store = new TaskListStore(process.env.PI_TASK_LIST_ID ?? null);
+
+	// ── Persistence ─────────────────────────────────────────────────
+
+	/**
+	 * Persist current state. Routes to file store (shared mode) or session
+	 * entries (session-only mode).
+	 */
 	function persistState(): void {
-		pi.appendEntry("tasks-state", {
-			tasks: state.tasks,
-			activeTaskId: state.activeTaskId,
-			visible: state.visible,
-		});
+		if (store.isShared) {
+			// In shared mode, individual task saves happen at mutation sites.
+			// This saves the meta state (visibility, nextId) as a session entry
+			// so widget prefs survive compaction even in shared mode.
+			pi.appendEntry("tasks-state", {
+				visible: state.visible,
+				nextId: state.nextId,
+				activeTaskId: state.activeTaskId,
+			});
+		} else {
+			pi.appendEntry("tasks-state", {
+				tasks: state.tasks,
+				activeTaskId: state.activeTaskId,
+				visible: state.visible,
+				nextId: state.nextId,
+			});
+		}
 	}
 
-	// Add a new task
-	function addTask(title: string, dependencies: string[] = []): Task {
+	/**
+	 * Save a single task to the file store (no-op in session-only mode).
+	 * @param task - Task to persist
+	 */
+	function persistTask(task: Task): void {
+		store.saveTask(task);
+	}
+
+	/**
+	 * Load tasks from the file store into state (shared mode only).
+	 * @returns True if tasks were loaded from store
+	 */
+	function loadFromStore(): boolean {
+		const tasks = store.loadAll();
+		if (tasks === null) return false;
+		state.tasks = tasks;
+		// Recalculate nextId from loaded tasks
+		const maxId = tasks.reduce((max, t) => Math.max(max, Number(t.id) || 0), 0);
+		state.nextId = maxId + 1;
+		// Restore activeTaskId from in_progress task
+		const active = tasks.find((t) => t.status === "in_progress");
+		state.activeTaskId = active?.id ?? null;
+		return true;
+	}
+
+	// ── Task operations ─────────────────────────────────────────────
+
+	/**
+	 * Create a new task.
+	 * @param subject - Short summary
+	 * @param description - Optional detailed description
+	 * @returns The created task
+	 */
+	function addTask(subject: string, description?: string): Task {
 		const task: Task = {
-			id: generateTaskId(),
-			title,
+			id: nextTaskId(state),
+			subject,
+			description,
 			status: "pending",
-			dependencies,
+			blocks: [],
+			blockedBy: [],
+			comments: [],
 			createdAt: Date.now(),
 		};
 		state.tasks.push(task);
+		persistTask(task);
 		return task;
 	}
 
-	// Update task status
+	/**
+	 * Update a task's status with dependency enforcement.
+	 * @param taskId - Task ID to update
+	 * @param status - New status
+	 * @returns True if update succeeded
+	 */
 	function updateTaskStatus(taskId: string, status: TaskStatus): boolean {
 		const task = state.tasks.find((t) => t.id === taskId);
 		if (!task) return false;
 
-		// If completing, check dependencies
+		// If completing, check blockedBy deps
 		if (status === "completed") {
-			const unmetDeps = task.dependencies.filter((depId) => {
+			const unmetDeps = task.blockedBy.filter((depId) => {
 				const dep = state.tasks.find((t) => t.id === depId);
 				return dep && dep.status !== "completed";
 			});
@@ -512,38 +819,106 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 			for (const t of state.tasks) {
 				if (t.status === "in_progress") {
 					t.status = "pending";
+					persistTask(t);
 				}
 			}
 			state.activeTaskId = taskId;
 		}
 
 		task.status = status;
+		persistTask(task);
 		return true;
 	}
 
-	// Delete a task
+	/**
+	 * Add bidirectional blocking relationships.
+	 * @param taskId - Task to modify
+	 * @param addBlocks - Task IDs this task should block
+	 * @param addBlockedBy - Task IDs that should block this task
+	 */
+	function updateTaskDeps(taskId: string, addBlocks?: string[], addBlockedBy?: string[]): void {
+		const task = state.tasks.find((t) => t.id === taskId);
+		if (!task) return;
+
+		if (addBlocks) {
+			for (const targetId of addBlocks) {
+				if (!task.blocks.includes(targetId)) task.blocks.push(targetId);
+				// Mirror: add this task to target's blockedBy
+				const target = state.tasks.find((t) => t.id === targetId);
+				if (target && !target.blockedBy.includes(taskId)) {
+					target.blockedBy.push(taskId);
+					persistTask(target);
+				}
+			}
+		}
+
+		if (addBlockedBy) {
+			for (const blockerId of addBlockedBy) {
+				if (!task.blockedBy.includes(blockerId)) task.blockedBy.push(blockerId);
+				// Mirror: add this task to blocker's blocks
+				const blocker = state.tasks.find((t) => t.id === blockerId);
+				if (blocker && !blocker.blocks.includes(taskId)) {
+					blocker.blocks.push(taskId);
+					persistTask(blocker);
+				}
+			}
+		}
+
+		persistTask(task);
+	}
+
+	/**
+	 * Add a comment to a task.
+	 * @param taskId - Task to add comment to
+	 * @param author - Who wrote the comment
+	 * @param content - Comment text
+	 * @returns True if comment was added
+	 */
+	function addComment(taskId: string, author: string, content: string): boolean {
+		const task = state.tasks.find((t) => t.id === taskId);
+		if (!task) return false;
+
+		task.comments.push({ author, content, timestamp: Date.now() });
+		persistTask(task);
+		return true;
+	}
+
+	/**
+	 * Delete a task and clean up dep references.
+	 * @param taskId - Task ID to remove
+	 * @returns True if task was found and deleted
+	 */
 	function deleteTask(taskId: string): boolean {
 		const index = state.tasks.findIndex((t) => t.id === taskId);
 		if (index === -1) return false;
 
 		state.tasks.splice(index, 1);
 
-		// Remove from other tasks' dependencies
+		// Remove from other tasks' deps (both directions)
 		for (const task of state.tasks) {
-			task.dependencies = task.dependencies.filter((id) => id !== taskId);
+			const hadBlock = task.blocks.includes(taskId);
+			const hadBlockedBy = task.blockedBy.includes(taskId);
+			task.blocks = task.blocks.filter((id) => id !== taskId);
+			task.blockedBy = task.blockedBy.filter((id) => id !== taskId);
+			if (hadBlock || hadBlockedBy) persistTask(task);
 		}
 
 		if (state.activeTaskId === taskId) {
 			state.activeTaskId = null;
 		}
 
+		store.deleteTask(taskId);
 		return true;
 	}
 
-	// Clear all tasks
+	/**
+	 * Clear all tasks.
+	 */
 	function clearTasks(): void {
+		store.deleteAll();
 		state.tasks = [];
 		state.activeTaskId = null;
+		// Don't reset nextId — avoids ID reuse across clears
 	}
 
 	// Toggle visibility
@@ -570,25 +945,27 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 						return;
 					}
 					const list = state.tasks
-						.map((t, i) => {
+						.map((t) => {
 							const icon = t.status === "completed" ? "✓" : t.status === "in_progress" ? "▣" : "☐";
-							const deps = t.dependencies.length > 0 ? ` (depends on: ${t.dependencies.length} tasks)` : "";
-							return `${i + 1}. ${icon} ${t.title}${deps}`;
+							const blocked = t.blockedBy.length > 0 ? ` (blocked by: ${t.blockedBy.join(", ")})` : "";
+							const comments = t.comments.length > 0 ? ` 💬${t.comments.length}` : "";
+							return `${t.id}. ${icon} ${t.subject}${blocked}${comments}`;
 						})
 						.join("\n");
-					ctx.ui.notify(`Tasks:\n${list}`, "info");
+					const mode = store.isShared ? ` [shared: ${process.env.PI_TASK_LIST_ID}]` : " [session-only]";
+					ctx.ui.notify(`Tasks${mode}:\n${list}`, "info");
 					break;
 				}
 
 				case "add": {
 					if (!rest) {
-						ctx.ui.notify("Usage: /tasks add <task description>", "error");
+						ctx.ui.notify("Usage: /tasks add <task subject>", "error");
 						return;
 					}
 					const task = addTask(rest);
 					updateWidget(ctx);
 					persistState();
-					ctx.ui.notify(`Added task: ${task.title}`, "info");
+					ctx.ui.notify(`Added #${task.id}: ${task.subject}`, "info");
 					break;
 				}
 
@@ -603,9 +980,9 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 					if (updateTaskStatus(task.id, "completed")) {
 						updateWidget(ctx);
 						persistState();
-						ctx.ui.notify(`Completed: ${task.title}`, "info");
+						ctx.ui.notify(`Completed: ${task.subject}`, "info");
 					} else {
-						ctx.ui.notify("Cannot complete task - dependencies not met", "error");
+						ctx.ui.notify("Cannot complete task - blocked by unfinished dependencies", "error");
 					}
 					break;
 				}
@@ -621,7 +998,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 					updateTaskStatus(task.id, "in_progress");
 					updateWidget(ctx);
 					persistState();
-					ctx.ui.notify(`Started: ${task.title}`, "info");
+					ctx.ui.notify(`Started: ${task.subject}`, "info");
 					break;
 				}
 
@@ -636,7 +1013,22 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 					deleteTask(task.id);
 					updateWidget(ctx);
 					persistState();
-					ctx.ui.notify(`Deleted: ${task.title}`, "info");
+					ctx.ui.notify(`Deleted: ${task.subject}`, "info");
+					break;
+				}
+
+				case "id": {
+					if (rest) {
+						ctx.ui.notify(
+							`Set PI_TASK_LIST_ID=${rest} in your shell to enable shared tasks.\n` +
+								"Then restart Pi. Runtime switching is not supported.",
+							"info"
+						);
+					} else {
+						const current = store.isShared ? process.env.PI_TASK_LIST_ID : "(none — session-only)";
+						const path = store.path ?? "N/A";
+						ctx.ui.notify(`Task list ID: ${current}\nPath: ${path}`, "info");
+					}
 					break;
 				}
 
@@ -657,14 +1049,15 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 				default:
 					ctx.ui.notify(
-						"Usage: /tasks [list|add|complete|start|delete|clear|toggle]\n" +
+						"Usage: /tasks [list|add|complete|start|delete|clear|toggle|id]\n" +
 							"  list          - Show all tasks\n" +
 							"  add <task>    - Add a new task\n" +
 							"  complete <n>  - Mark task n as completed\n" +
 							"  start <n>     - Mark task n as in-progress\n" +
 							"  delete <n>    - Delete task n\n" +
 							"  clear         - Clear all tasks\n" +
-							"  toggle        - Show/hide task widget",
+							"  toggle        - Show/hide task widget\n" +
+							"  id [name]     - Show or set task list ID",
 						"info"
 					);
 			}
@@ -700,25 +1093,32 @@ IMPORTANT RULES:
 - If [ACTIVE TASKS] shown in message, continue those tasks
 - If conversation moved on to different topic, clear stale tasks immediately
 - Complete tasks as you finish them (auto-advances to next)
-- Tasks auto-clear 2 seconds after all complete`,
+- Tasks auto-clear 2 seconds after all complete
+- Use addComment to leave context for future sessions (why something was done, what was tried)
+- Use addBlockedBy/addBlocks to set dependency chains between tasks`,
 		parameters: Type.Object({
 			action: Type.String({
 				description:
-					"Action: clear (remove all), complete_all (mark all done), list (show current), add (new task), complete (mark one done)",
+					"Action: clear (remove all), complete_all (mark all done), list (show current), add (new task), complete (mark one done), update (modify task)",
 			}),
 			task: Type.Optional(
 				Type.String({
-					description: "Task title (for add action)",
+					description: "Task subject/title (for add action)",
 				})
 			),
 			tasks: Type.Optional(
 				Type.Array(Type.String(), {
-					description: "Multiple task titles to add at once",
+					description: "Multiple task subjects to add at once",
+				})
+			),
+			description: Type.Optional(
+				Type.String({
+					description: "Detailed task description (for add or update action)",
 				})
 			),
 			index: Type.Optional(
 				Type.Number({
-					description: "Task number to complete (1-indexed, for complete action)",
+					description: "Task number to complete/update (1-indexed)",
 				})
 			),
 			indices: Type.Optional(
@@ -726,10 +1126,36 @@ IMPORTANT RULES:
 					description: "Multiple task numbers to complete at once (1-indexed)",
 				})
 			),
+			addBlocks: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "Task IDs that this task blocks (for update action)",
+				})
+			),
+			addBlockedBy: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "Task IDs that block this task (for update action)",
+				})
+			),
+			addComment: Type.Optional(
+				Type.Object({
+					author: Type.String({ description: "Comment author (e.g. 'agent', 'user', agent name)" }),
+					content: Type.String({ description: "Comment text — context for future sessions" }),
+				})
+			),
 		}),
 		async execute(
 			_toolCallId: string,
-			params: { action: string; task?: string; tasks?: string[]; index?: number; indices?: number[] },
+			params: {
+				action: string;
+				task?: string;
+				tasks?: string[];
+				description?: string;
+				index?: number;
+				indices?: number[];
+				addBlocks?: string[];
+				addBlockedBy?: string[];
+				addComment?: { author: string; content: string };
+			},
 			_signal: AbortSignal | undefined,
 			_onUpdate: unknown,
 			ctx: ExtensionContext
@@ -745,27 +1171,17 @@ IMPORTANT RULES:
 				case "add": {
 					// Batch add multiple tasks
 					if (params.tasks && params.tasks.length > 0) {
-						// ATOMIC: Build new list without intermediate empty state (prevents widget flicker)
 						const pendingTasks = state.tasks.filter((t) => t.status !== "completed");
 						const wasEmpty = pendingTasks.length === 0;
 
-						const newTasks: Task[] = [];
-						for (const title of params.tasks) {
-							newTasks.push({
-								id: generateTaskId(),
-								title,
-								status: "pending",
-								dependencies: [],
-								createdAt: Date.now(),
-							});
+						for (const subject of params.tasks) {
+							addTask(subject);
 						}
-
-						// Single atomic assignment
-						state.tasks = [...pendingTasks, ...newTasks];
 
 						// Auto-start first task if list was empty
 						if (wasEmpty && state.tasks.length > 0) {
-							updateTaskStatus(state.tasks[0].id, "in_progress");
+							const firstPending = state.tasks.find((t) => t.status === "pending");
+							if (firstPending) updateTaskStatus(firstPending.id, "in_progress");
 						}
 						updateWidget(ctx);
 						persistState();
@@ -773,16 +1189,45 @@ IMPORTANT RULES:
 					}
 					// Single task add
 					if (!params.task) {
-						return { details: {}, content: [{ type: "text", text: "Missing task title" }] };
+						return { details: {}, content: [{ type: "text", text: "Missing task subject" }] };
 					}
-					const newTask = addTask(params.task);
+					const newTask = addTask(params.task, params.description);
 					// Auto-start if first task
 					if (state.tasks.length === 1) {
 						updateTaskStatus(newTask.id, "in_progress");
 					}
 					updateWidget(ctx);
 					persistState();
-					return { details: {}, content: [{ type: "text", text: `Added: ${params.task}` }] };
+					return { details: {}, content: [{ type: "text", text: `Added #${newTask.id}: ${params.task}` }] };
+				}
+				case "update": {
+					const updateIdx = (params.index || 1) - 1;
+					if (updateIdx < 0 || updateIdx >= state.tasks.length) {
+						return { details: {}, content: [{ type: "text", text: "Invalid task number" }] };
+					}
+					const taskToUpdate = state.tasks[updateIdx];
+					const changes: string[] = [];
+
+					if (params.description !== undefined) {
+						taskToUpdate.description = params.description;
+						changes.push("description");
+					}
+					if (params.addBlocks || params.addBlockedBy) {
+						updateTaskDeps(taskToUpdate.id, params.addBlocks, params.addBlockedBy);
+						changes.push("dependencies");
+					}
+					if (params.addComment) {
+						addComment(taskToUpdate.id, params.addComment.author, params.addComment.content);
+						changes.push("comment");
+					}
+
+					persistTask(taskToUpdate);
+					updateWidget(ctx);
+					persistState();
+					return {
+						details: {},
+						content: [{ type: "text", text: `Updated #${taskToUpdate.id}: ${changes.join(", ")}` }],
+					};
 				}
 				case "complete": {
 					// Support completing multiple tasks at once
@@ -794,7 +1239,7 @@ IMPORTANT RULES:
 								const task = state.tasks[idx];
 								if (task.status !== "completed") {
 									updateTaskStatus(task.id, "completed");
-									completed.push(task.title);
+									completed.push(task.subject);
 								}
 							}
 						}
@@ -808,7 +1253,7 @@ IMPORTANT RULES:
 						// Auto-clear if all done
 						if (state.tasks.every((t) => t.status === "completed")) {
 							setTimeout(() => {
-								state.tasks = [];
+								clearTasks();
 								updateWidget(ctx);
 								persistState();
 							}, 2000);
@@ -825,6 +1270,10 @@ IMPORTANT RULES:
 						return { details: {}, content: [{ type: "text", text: "Invalid task number" }] };
 					}
 					const taskToComplete = state.tasks[idx];
+					// Add completion comment if provided
+					if (params.addComment) {
+						addComment(taskToComplete.id, params.addComment.author, params.addComment.content);
+					}
 					updateTaskStatus(taskToComplete.id, "completed");
 					// Start next pending task
 					const nextPendingSingle = state.tasks.find((t) => t.status === "pending");
@@ -836,23 +1285,24 @@ IMPORTANT RULES:
 					// Auto-clear if all done
 					if (state.tasks.every((t) => t.status === "completed")) {
 						setTimeout(() => {
-							state.tasks = [];
+							clearTasks();
 							updateWidget(ctx);
 							persistState();
 						}, 2000);
 					}
-					return { details: {}, content: [{ type: "text", text: `Completed: ${taskToComplete.title}` }] };
+					return { details: {}, content: [{ type: "text", text: `Completed: ${taskToComplete.subject}` }] };
 				}
-				case "complete_all":
+				case "complete_all": {
 					for (const task of state.tasks) {
 						task.status = "completed";
 						task.completedAt = Date.now();
+						persistTask(task);
 					}
 					state.activeTaskId = null;
 					updateWidget(ctx);
 					persistState();
 					setTimeout(() => {
-						state.tasks = [];
+						clearTasks();
 						updateWidget(ctx);
 						persistState();
 					}, 1000);
@@ -860,11 +1310,18 @@ IMPORTANT RULES:
 						details: {},
 						content: [{ type: "text", text: `Marked ${state.tasks.length} tasks complete. Will auto-clear.` }],
 					};
+				}
 				case "list": {
 					if (state.tasks.length === 0) {
 						return { details: {}, content: [{ type: "text", text: "No tasks." }] };
 					}
-					const list = state.tasks.map((t, i) => `${i + 1}. [${t.status}] ${t.title}`).join("\n");
+					const list = state.tasks
+						.map((t) => {
+							const blocked = t.blockedBy.length > 0 ? ` [blocked by: ${t.blockedBy.join(",")}]` : "";
+							const comments = t.comments.length > 0 ? ` (${t.comments.length} comments)` : "";
+							return `${t.id}. [${t.status}] ${t.subject}${blocked}${comments}`;
+						})
+						.join("\n");
 					return { details: {}, content: [{ type: "text", text: list }] };
 				}
 				default:
@@ -927,14 +1384,17 @@ IMPORTANT RULES:
 		if (pending.length === 0) return;
 
 		const taskList = pending
-			.map((t, i) => {
+			.map((t) => {
 				const status = t.status === "in_progress" ? " [IN PROGRESS]" : "";
-				return `${i + 1}. ${t.title}${status}`;
+				const blocked = t.blockedBy.length > 0 ? ` [blocked by: ${t.blockedBy.join(", ")}]` : "";
+				const desc = t.description ? `\n   ${t.description}` : "";
+				const lastComment = t.comments.length > 0 ? `\n   💬 ${t.comments.at(-1)?.content}` : "";
+				return `${t.id}. ${t.subject}${status}${blocked}${desc}${lastComment}`;
 			})
 			.join("\n");
 
 		const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
-		const focusText = activeTask ? `\nCurrent focus: ${activeTask.title}` : "";
+		const focusText = activeTask ? `\nCurrent focus: ${activeTask.subject}` : "";
 
 		return {
 			message: {
@@ -960,17 +1420,44 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 
 	// Restore state on session start
 	pi.on("session_start", async (_event, ctx) => {
+		// Restore meta state (visibility, nextId) from session entries
 		const entries = ctx.sessionManager.getEntries();
-
-		// Find most recent tasks-state entry
 		const stateEntry = entries
 			.filter((e: { type: string; customType?: string }) => e.type === "custom" && e.customType === "tasks-state")
-			.pop() as { data?: TasksState } | undefined;
+			.pop() as { data?: Omit<Partial<TasksState>, "tasks"> & { tasks?: Record<string, unknown>[] } } | undefined;
 
 		if (stateEntry?.data) {
-			state.tasks = stateEntry.data.tasks || [];
-			state.activeTaskId = stateEntry.data.activeTaskId || null;
 			state.visible = stateEntry.data.visible ?? true;
+			state.nextId = stateEntry.data.nextId ?? 1;
+			state.activeTaskId = stateEntry.data.activeTaskId ?? null;
+		}
+
+		// Load tasks: prefer file store (shared mode), fall back to session entries
+		if (store.isShared) {
+			loadFromStore();
+
+			// Start watching for cross-session changes
+			store.watch(() => {
+				loadFromStore();
+				updateWidget(ctx);
+			});
+		} else if (stateEntry?.data?.tasks) {
+			// Session-only mode: restore from entries, migrating old schema
+			state.tasks = stateEntry.data.tasks.map((t) => ({
+				id: (t.id as string) ?? String(state.nextId++),
+				subject: (t.subject as string) ?? (t.title as string) ?? "Untitled",
+				description: t.description as string | undefined,
+				status: (t.status as TaskStatus) ?? "pending",
+				blocks: (t.blocks as string[]) ?? [],
+				blockedBy: (t.blockedBy as string[]) ?? (t.dependencies as string[]) ?? [],
+				comments: (t.comments as TaskComment[]) ?? [],
+				owner: t.owner as string | undefined,
+				createdAt: (t.createdAt as number) ?? Date.now(),
+				completedAt: t.completedAt as number | undefined,
+			}));
+			// Recalculate nextId
+			const maxId = state.tasks.reduce((max, t) => Math.max(max, Number(t.id) || 0), 0);
+			state.nextId = Math.max(state.nextId, maxId + 1);
 		}
 
 		updateWidget(ctx);
@@ -1005,6 +1492,7 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 
 	// Cleanup on session end
 	pi.on("session_shutdown", async () => {
+		store.close();
 		persistState();
 	});
 }
