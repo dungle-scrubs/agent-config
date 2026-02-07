@@ -101,6 +101,67 @@ interface SubagentView {
 	startTime: number;
 }
 
+// ── Agent Activity Tracking ───────────────────────────────────────────────────
+
+/** Live activity status for a running subagent (updated via event bus). */
+interface AgentActivity {
+	toolName: string;
+	summary: string;
+	timestamp: number;
+}
+
+/**
+ * Tracks the current activity of each running subagent by agent_id.
+ * Populated from subagent_tool_call events, cleared on subagent_stop.
+ */
+const agentActivity = new Map<string, AgentActivity>();
+
+/** Agent color palette for teammate display (CC-style). */
+const AGENT_COLORS: readonly string[] = ["green", "cyan", "magenta", "yellow", "blue", "red"] as const;
+
+/**
+ * Assigns a deterministic color to an agent name via hash.
+ * @param name - Agent name to hash
+ * @returns ANSI color name
+ */
+function agentColor(name: string): string {
+	let hash = 0;
+	for (let i = 0; i < name.length; i++) {
+		hash = Math.trunc(hash * 31 + name.charCodeAt(i));
+	}
+	return AGENT_COLORS[Math.abs(hash) % AGENT_COLORS.length];
+}
+
+/**
+ * Builds a human-readable summary from a tool call.
+ * @param toolName - Name of the tool being called
+ * @param toolInput - Tool input parameters
+ * @returns Short activity description
+ */
+function summarizeToolCall(toolName: string, toolInput: Record<string, unknown>): string {
+	switch (toolName) {
+		case "bash": {
+			const cmd = String(toolInput.command ?? "");
+			const firstLine = cmd.split("\n")[0];
+			return firstLine.length > 40 ? `${firstLine.slice(0, 37)}...` : firstLine;
+		}
+		case "read":
+			return `Reading ${String(toolInput.path ?? "")}`;
+		case "edit":
+			return `Editing ${String(toolInput.path ?? "")}`;
+		case "write":
+			return `Writing ${String(toolInput.path ?? "")}`;
+		case "grep":
+			return `Searching: ${String(toolInput.pattern ?? "")}`;
+		case "find":
+			return `Finding: ${String(toolInput.pattern ?? "")}`;
+		case "ls":
+			return `Listing ${String(toolInput.path ?? ".")}`;
+		default:
+			return toolName;
+	}
+}
+
 // ── Widget State ─────────────────────────────────────────────────────────────
 
 /** Complete tasks widget state including visibility and active task tracking. */
@@ -540,63 +601,69 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 	function renderSubagentLines(
 		ctx: ExtensionContext,
 		spinner: string,
-		fgRunning: Array<{ agent: string; task: string; startTime: number }>,
-		bgRunning: Array<{ agent: string; task: string; startTime: number }>,
+		fgRunning: Array<{ id: string; agent: string; task: string; startTime: number }>,
+		bgRunning: Array<{ id: string; agent: string; task: string; startTime: number }>,
 		maxTaskPreviewLen: number,
 		_standalone: boolean
 	): string[] {
-		if (fgRunning.length === 0 && bgRunning.length === 0) return [];
+		const allRunning = [...fgRunning, ...bgRunning];
+		if (allRunning.length === 0) return [];
 
 		const lines: string[] = [];
+		const count = allRunning.length;
+		lines.push(
+			`${ctx.ui.theme.fg("accent", `${count} agent${count > 1 ? "s" : ""} launched`)} ${ctx.ui.theme.fg("muted", "(ctrl+o to expand)")}`
+		);
 
-		// Foreground (sync) subagents
-		if (fgRunning.length > 0) {
+		for (let i = 0; i < allRunning.length; i++) {
+			const sub = allRunning[i];
+			const isLast = i === allRunning.length - 1;
+			const treeChar = isLast ? "└─" : "├─";
+			const contChar = isLast ? " " : "│";
+			const color = agentColor(sub.agent);
+			const ms = Date.now() - sub.startTime;
+			const secs = Math.floor(ms / 1000);
+			const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
+
+			// Line 1: @agent-name with colored indicator
 			lines.push(
-				`${ctx.ui.theme.fg("accent", "Subagents")} ${ctx.ui.theme.fg("warning", `${spinner} ${fgRunning.length} running`)}`
+				`${ctx.ui.theme.fg("muted", treeChar)} \x1b[38;5;${colorToAnsi(color)}m${spinner}\x1b[0m \x1b[1;38;5;${colorToAnsi(color)}m@${sub.agent}\x1b[0m ${ctx.ui.theme.fg("muted", `· ${duration}`)}`
 			);
 
-			for (let i = 0; i < fgRunning.length; i++) {
-				const sub = fgRunning[i];
-				const isLast = i === fgRunning.length - 1 && bgRunning.length === 0;
-				const treeChar = isLast ? "└─" : "├─";
-				const ms = Date.now() - sub.startTime;
-				const secs = Math.floor(ms / 1000);
-				const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
-				const taskPreview =
-					sub.task.length > maxTaskPreviewLen ? `${sub.task.slice(0, maxTaskPreviewLen - 3)}...` : sub.task;
-				lines.push(
-					`${ctx.ui.theme.fg("muted", treeChar)} ${ctx.ui.theme.fg("warning", spinner)} ${ctx.ui.theme.fg("accent", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
-				);
-			}
-		}
+			// Line 2: task description
+			const taskPreview =
+				sub.task.length > maxTaskPreviewLen ? `${sub.task.slice(0, maxTaskPreviewLen - 3)}...` : sub.task;
+			lines.push(`${ctx.ui.theme.fg("muted", `${contChar}  `)} ${ctx.ui.theme.fg("dim", taskPreview)}`);
 
-		// Background subagents
-		if (bgRunning.length > 0) {
-			if (fgRunning.length === 0) {
-				lines.push(
-					`${ctx.ui.theme.fg("accent", "Background Subagents")} ${ctx.ui.theme.fg("success", `${spinner} ${bgRunning.length} running`)}`
-				);
-			} else {
-				lines.push(`${ctx.ui.theme.fg("muted", "├─")} ${ctx.ui.theme.fg("dim", "background:")}`);
-			}
-
-			for (let i = 0; i < bgRunning.length; i++) {
-				const sub = bgRunning[i];
-				const isLast = i === bgRunning.length - 1;
-				const treeChar = isLast ? "└─" : "├─";
-				const indent = fgRunning.length > 0 ? "│  " : "";
-				const ms = Date.now() - sub.startTime;
-				const secs = Math.floor(ms / 1000);
-				const duration = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m${secs % 60}s`;
-				const taskPreview =
-					sub.task.length > maxTaskPreviewLen ? `${sub.task.slice(0, maxTaskPreviewLen - 3)}...` : sub.task;
-				lines.push(
-					`${ctx.ui.theme.fg("muted", indent + treeChar)} ${ctx.ui.theme.fg("success", spinner)} ${ctx.ui.theme.fg("accent", sub.agent)}: ${ctx.ui.theme.fg("dim", taskPreview)} ${ctx.ui.theme.fg("muted", `(${duration})`)}`
-				);
+			// Line 3: live activity (if available)
+			const activity = agentActivity.get(sub.id);
+			if (activity) {
+				const activityText =
+					activity.summary.length > maxTaskPreviewLen
+						? `${activity.summary.slice(0, maxTaskPreviewLen - 3)}...`
+						: activity.summary;
+				lines.push(`${ctx.ui.theme.fg("muted", `${contChar}  `)} ${ctx.ui.theme.fg("warning", activityText)}`);
 			}
 		}
 
 		return lines;
+	}
+
+	/**
+	 * Maps color names to ANSI 256-color codes.
+	 * @param color - Color name string
+	 * @returns ANSI 256-color code number
+	 */
+	function colorToAnsi(color: string): number {
+		const map: Record<string, number> = {
+			green: 78,
+			cyan: 80,
+			magenta: 170,
+			yellow: 220,
+			blue: 75,
+			red: 203,
+		};
+		return map[color] ?? 78;
 	}
 
 	/**
@@ -1769,6 +1836,41 @@ When you complete a task, mark it with [DONE] or include "completed:" followed b
 					updateWidget(ctx);
 				}
 			}, 200); // Faster interval for smoother animation
+			// Track live subagent activity via event bus
+			pi.events.on("subagent_tool_call", (raw: unknown) => {
+				const data = raw as Record<string, unknown>;
+				const agentId = String(data.agent_id ?? "");
+				const toolName = String(data.tool_name ?? "");
+				const toolInput = (data.tool_input ?? {}) as Record<string, unknown>;
+				if (agentId) {
+					agentActivity.set(agentId, {
+						toolName,
+						summary: summarizeToolCall(toolName, toolInput),
+						timestamp: Date.now(),
+					});
+				}
+			});
+
+			pi.events.on("subagent_tool_result", (raw: unknown) => {
+				const data = raw as Record<string, unknown>;
+				const agentId = String(data.agent_id ?? "");
+				if (agentId) {
+					// Clear activity — agent is between tool calls (thinking)
+					agentActivity.set(agentId, {
+						toolName: "",
+						summary: "Thinking...",
+						timestamp: Date.now(),
+					});
+				}
+			});
+
+			pi.events.on("subagent_stop", (raw: unknown) => {
+				const data = raw as Record<string, unknown>;
+				const agentId = String(data.agent_id ?? "");
+				if (agentId) {
+					agentActivity.delete(agentId);
+				}
+			});
 		} // end !isSubagent interval guard
 	});
 
