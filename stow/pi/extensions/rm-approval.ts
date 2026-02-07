@@ -62,16 +62,20 @@ function extractRmTargets(command: string): string[] {
 	return targets;
 }
 
+/** Path prefixes that are always safe to rm (temp dirs, OS caches). */
+const SAFE_PATH_PREFIXES = ["/tmp/", "/var/tmp/", "/private/tmp/"];
+
 /**
- * Checks if all rm targets are safe build artifact directories.
+ * Checks if all rm targets are safe build artifact directories or temp paths.
  * @param targets - Array of target paths
- * @returns True if every target is in the safe list
+ * @returns True if every target is in the safe list or under a safe prefix
  */
 function allTargetsSafe(targets: string[]): boolean {
 	if (targets.length === 0) return false;
 	return targets.every((t) => {
 		const base = t.replace(/\/+$/, "").split("/").pop() || "";
-		return SAFE_DIRECTORIES.has(base);
+		if (SAFE_DIRECTORIES.has(base)) return true;
+		return SAFE_PATH_PREFIXES.some((prefix) => t.startsWith(prefix));
 	});
 }
 
