@@ -33,6 +33,7 @@ const SAFE_DIRECTORIES = new Set([
 	"venv",
 	".tox",
 	".expo",
+	"tmp/*",
 ]);
 
 /** Pattern matching any rm with recursive + force flags. */
@@ -98,7 +99,10 @@ export default function rmApproval(pi: ExtensionAPI): void {
 
 		// Need UI for confirmation
 		if (!ctx.hasUI) {
-			return { block: true, reason: "Destructive rm blocked (no UI for confirmation)" };
+			return {
+				block: true,
+				reason: "Destructive rm blocked (no UI for confirmation)",
+			};
 		}
 
 		const ok = await ctx.ui.confirm(
