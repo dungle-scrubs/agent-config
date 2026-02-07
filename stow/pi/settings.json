@@ -3,6 +3,6 @@
 	"defaultProvider": "anthropic",
 	"defaultModel": "claude-opus-4-6",
 	"defaultThinkingLevel": "off",
-	"hideThinkingBlock": false,
+	"hideThinkingBlock": true,
 	"theme": "catppuccin-macchiato"
 }
