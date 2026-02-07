@@ -47,7 +47,7 @@ const MIN_SIDE_BY_SIDE_WIDTH = 120;
 // ── Task Types ───────────────────────────────────────────────────────────────
 
 /** Lifecycle state of a task. */
-type TaskStatus = "pending" | "in_progress" | "completed";
+type TaskStatus = "pending" | "in_progress" | "completed" | "deleted";
 
 /** A comment attached to a task for cross-session context. */
 interface TaskComment {
@@ -431,6 +431,10 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 		activeTaskId: null,
 		nextId: 1,
 	};
+
+	/** Turns since last manage_tasks tool use. Reset on tool call, incremented on turn_end. */
+	let turnsSinceLastTaskTool = 0;
+	const REMINDER_TURN_THRESHOLD = 10;
 
 	// Render the task widget
 	let lastWidgetContent = "";
@@ -1090,12 +1094,21 @@ export default function tasksExtension(pi: ExtensionAPI): void {
 
 WHEN TO CREATE TASKS:
 - User explicitly asks for a task list or plan
-- Multi-step work spanning multiple conversation turns
-- User needs to see progress on complex work
+- Multi-step work spanning multiple conversation turns (3+ steps)
+- User provides multiple tasks (numbered or comma-separated)
+- Non-trivial tasks requiring careful planning or multiple operations
+- After receiving new instructions — immediately capture requirements as tasks
 
 WHEN TO SKIP:
-- Quick single action (1-2 items, doing immediately)
-- User didn't ask and work is straightforward
+- Single, straightforward task completable in 1-2 steps
+- Purely conversational or informational requests
+- User didn't ask and work is trivial
+
+TASK STATES:
+- pending: not yet started
+- in_progress: currently working on (only ONE at a time)
+- completed: finished successfully
+- deleted: permanently removed (via update with status "deleted")
 
 IMPORTANT RULES:
 - If user explicitly asks for tasks, ALWAYS create them
@@ -1103,10 +1116,18 @@ IMPORTANT RULES:
 - If conversation moved on to different topic, clear stale tasks immediately
 - Complete tasks as you finish them (auto-advances to next)
 - Tasks auto-clear 2 seconds after all complete
+- ONLY mark a task completed when FULLY accomplished — not if tests fail, implementation is partial, or errors remain
+- When blocked, keep task in_progress and create a new task for the blocker
+- Always provide both subject (imperative: "Run tests") and activeForm (continuous: "Running tests")
 - Use addComment to leave context for future sessions (why something was done, what was tried)
 - Use addBlockedBy/addBlocks to set dependency chains between tasks
-- Use activeForm for present continuous spinner text (e.g. subject "Run tests" → activeForm "Running tests")
-- Use get action with index to view full task details including metadata, comments, and timestamps`,
+- Use get action with index to view full task details including metadata, comments, and timestamps
+
+EXAMPLES:
+- User: "Add dark mode, run tests when done" → Create tasks: 1) Add dark mode toggle component 2) Add dark mode state management 3) Update styles for theme switching 4) Run tests and fix failures
+- User: "Rename getUserId to getUserIdentifier across the project" → Search first, then create per-file tasks if many occurrences found
+- User: "What does git rebase do?" → Do NOT create tasks (informational, no action needed)
+- User: "Fix the typo in README.md" → Do NOT create tasks (single trivial step)`,
 		parameters: Type.Object({
 			action: Type.String({
 				description:
@@ -1143,9 +1164,15 @@ IMPORTANT RULES:
 					}
 				)
 			),
+			status: Type.Optional(
+				Type.String({
+					description:
+						"New status for update action: pending, in_progress, completed, or deleted (permanently removes the task)",
+				})
+			),
 			index: Type.Optional(
 				Type.Number({
-					description: "Task number to complete/update (1-indexed)",
+					description: "Task number to complete/update/get (1-indexed)",
 				})
 			),
 			indices: Type.Optional(
@@ -1179,6 +1206,7 @@ IMPORTANT RULES:
 				description?: string;
 				activeForm?: string;
 				metadata?: Record<string, unknown>;
+				status?: string;
 				index?: number;
 				indices?: number[];
 				addBlocks?: string[];
@@ -1189,6 +1217,7 @@ IMPORTANT RULES:
 			_onUpdate: unknown,
 			ctx: ExtensionContext
 		) {
+			turnsSinceLastTaskTool = 0;
 			switch (params.action) {
 				case "clear": {
 					const count = state.tasks.length;
@@ -1239,8 +1268,25 @@ IMPORTANT RULES:
 						return { details: {}, content: [{ type: "text", text: "Invalid task number" }] };
 					}
 					const taskToUpdate = state.tasks[updateIdx];
+
+					// Handle deleted status — permanently removes the task
+					if (params.status === "deleted") {
+						const subject = taskToUpdate.subject;
+						deleteTask(taskToUpdate.id);
+						updateWidget(ctx);
+						persistState();
+						return { details: {}, content: [{ type: "text", text: `Deleted #${taskToUpdate.id}: ${subject}` }] };
+					}
+
 					const changes: string[] = [];
 
+					if (params.status !== undefined) {
+						const validStatuses = ["pending", "in_progress", "completed"];
+						if (validStatuses.includes(params.status)) {
+							updateTaskStatus(taskToUpdate.id, params.status as TaskStatus);
+							changes.push(`status → ${params.status}`);
+						}
+					}
 					if (params.description !== undefined) {
 						taskToUpdate.description = params.description;
 						changes.push("description");
@@ -1405,6 +1451,7 @@ IMPORTANT RULES:
 	pi.on("turn_end", async (event, ctx) => {
 		if (!isAssistantMessage(event.message)) return;
 
+		turnsSinceLastTaskTool++;
 		const text = getTextContent(event.message);
 
 		// Check for completed tasks
@@ -1451,7 +1498,7 @@ IMPORTANT RULES:
 	pi.on("before_agent_start", async () => {
 		if (state.tasks.length === 0) return;
 
-		const pending = state.tasks.filter((t) => t.status !== "completed");
+		const pending = state.tasks.filter((t) => t.status !== "completed" && t.status !== "deleted");
 		if (pending.length === 0) return;
 
 		const taskList = pending
@@ -1467,6 +1514,12 @@ IMPORTANT RULES:
 		const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
 		const focusText = activeTask ? `\nCurrent focus: ${activeTask.subject}` : "";
 
+		// Gentle reminder if manage_tasks hasn't been used in a while
+		const reminder =
+			turnsSinceLastTaskTool >= REMINDER_TURN_THRESHOLD
+				? "\n\n[Reminder] The manage_tasks tool hasn't been used recently. Update task progress, mark completed tasks, or clean up stale items."
+				: "";
+
 		return {
 			message: {
 				customType: "tasks-context",
@@ -1474,7 +1527,7 @@ IMPORTANT RULES:
 ${taskList}
 ${focusText}
 
-When you complete a task, mark it with [DONE] or include "completed:" followed by the task description.`,
+When you complete a task, mark it with [DONE] or include "completed:" followed by the task description.${reminder}`,
 				display: false,
 			},
 		};
